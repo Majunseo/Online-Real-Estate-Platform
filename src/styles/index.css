@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 디자인 토큰. 색은 여기서만 정하고 컴포넌트는 이름으로 쓴다. */
+:root {
+  --bg: 255 255 255;
+  --surface: 255 255 255;
+  --band: 245 245 244; /* 회색 띠 구역 */
+  --line: 214 216 219;
+  --ink: 17 20 24;
+  --muted: 84 89 98;
+  --brand: 13 124 102;
+  --brand-strong: 9 94 77;
+  --brand-soft: 230 245 241;
+  --tag: 196 68 30; /* 카드 왼쪽 위 표시 */
+  --boundary: 29 78 216; /* 지도에서 고른 지역 테두리 (map/sidoStyle.ts 와 같은 색) */
+  --station: 30 42 74; /* 지도 위 지하철역 이름표 (map/useStationMarkers.ts 의 원과 같은 색) */
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: rgb(var(--bg));
+    color: rgb(var(--ink));
+    @apply font-sans antialiased;
+  }
+  /* Edge 의 비밀번호 보기 단추를 숨긴다 (입력칸에 직접 만든 보기 단추가 있다) */
+  input::-ms-reveal,
+  input::-ms-clear {
+    display: none;
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--brand));
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-base font-bold transition-colors;
+  }
+  .btn-primary {
+    @apply btn bg-brand text-white hover:bg-brand-strong;
+  }
+  .btn-outline {
+    @apply btn border-2 border-brand bg-surface text-brand hover:bg-brand-soft;
+  }
+  .section-title {
+    @apply text-[26px] font-extrabold tracking-tight text-ink;
+  }
+  .section-sub {
+    @apply mt-1 text-lg text-muted;
+  }
+  /* 지도 위 가격표 (네이버 지도 Marker 의 HTML 내용) */
+  .map-price {
+    @apply whitespace-nowrap rounded-full border-2 border-white bg-tag px-2.5 py-0.5 text-[13px] font-bold text-white shadow-md hover:z-10 hover:bg-ink;
+  }
+  /* 지도 위 지역 묶음: 지역 이름 + 단지 수 · 중간 가격 (누르면 그 지역으로) */
+  .map-region {
+    @apply flex min-w-[88px] cursor-pointer flex-col items-center whitespace-nowrap rounded-xl border-2 border-brand bg-surface px-3 py-1.5 leading-tight text-ink shadow-md hover:bg-brand hover:text-white;
+  }
+  .map-region b {
+    @apply text-[14px] font-extrabold;
+  }
+  .map-region span {
+    @apply text-[12px] font-bold opacity-80;
+  }
+  /* 여러 지역이 겹쳐 하나로 합친 묶음 (누르면 확대) */
+  .map-region.is-group {
+    @apply border-dashed bg-brand-soft;
+  }
+  /* 동 묶음: 한 줄로 작게 ("치평동 18") */
+  .map-region.is-compact {
+    @apply flex-row gap-1.5 rounded-full border-[1.5px] px-2.5 py-1;
+  }
+  .map-region.is-compact b {
+    @apply text-[13px];
+  }
+  .map-region.is-compact span {
+    @apply rounded-full bg-brand px-1.5 text-[11px] text-white opacity-100;
+  }
+  .map-region.is-group:hover {
+    @apply bg-brand text-white;
+  }
+  /* 지도 위 숫자 묶음 (가까운 단지 여러 곳) */
+  .map-cluster {
+    @apply flex h-10 w-10 items-center justify-center rounded-full border-[3px] border-white bg-brand text-[14px] font-extrabold text-white shadow-md hover:bg-brand-strong;
+  }
+  /* 지도 위 지하철역 (역세권 조건일 때만): 단지 핀(둥근 주황)과 다르게 네모난 남색 이름표 + 아래 꼬리 */
+  .map-station {
+    @apply relative flex -translate-x-1/2 -translate-y-full items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-[12px] font-bold text-white shadow-md;
+    margin-top: -6px;
+    background-color: rgb(var(--station));
+  }
+  .map-station::after {
+    content: "";
+    @apply absolute left-1/2 top-full -translate-x-1/2 border-x-[5px] border-t-[6px] border-x-transparent;
+    border-top-color: rgb(var(--station));
+  }
+  .map-station svg {
+    @apply h-3.5 w-3.5 shrink-0;
+  }
+  .card {
+    @apply overflow-hidden rounded-xl bg-surface shadow-[0_2px_10px_rgb(0_0_0/0.12)];
+  }
+}
