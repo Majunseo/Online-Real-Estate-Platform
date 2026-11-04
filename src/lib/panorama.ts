@@ -1,4 +1,4 @@
-import type { NaverMaps } from "./naverMaps";
+import { quietly, type NaverMaps } from "./naverMaps";
 
 /** 네이버 거리뷰(Panorama) 도우미. 지도 스크립트를 submodules=panorama 로 불러온 뒤에 쓴다 */
 
@@ -115,7 +115,7 @@ export function enableClickToMove(m: NaverMaps, pano: NaverMaps, el: HTMLElement
   el.addEventListener("pointerup", onUp, true);
   return () => {
     window.clearTimeout(retry);
-    m.Event.removeListener(changed);
+    quietly(() => m.Event.removeListener(changed));
     el.removeEventListener("pointerdown", onDown, true);
     el.removeEventListener("pointerup", onUp, true);
   };

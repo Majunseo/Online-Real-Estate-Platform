@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Camera, ChevronLeft, Link2 } from "lucide-react";
 import type { Complex } from "@shared/types";
-import { loadNaverMaps, type NaverMaps } from "@/lib/naverMaps";
+import { loadNaverMaps, quietly, type NaverMaps } from "@/lib/naverMaps";
 import { enableClickToMove, openPanorama } from "@/lib/panorama";
 import { FavoriteButton } from "@/features/favorites/FavoriteButton";
 
@@ -54,7 +54,7 @@ export function StreetViewScreen({ complex: c, onBackToListing, onBackToMap }: P
       alive = false;
       observer?.disconnect();
       stopClick?.();
-      pano?.destroy?.();
+      quietly(() => pano?.destroy?.());
     };
   }, [c.lat, c.lng]);
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { loadNaverMaps, type NaverMaps } from "@/lib/naverMaps";
+import { loadNaverMaps, quietly, type NaverMaps } from "@/lib/naverMaps";
 import { KOREA_VIEW } from "./sidoStyle";
 
 export type MapStatus = "loading" | "ready" | "error";
@@ -33,7 +33,7 @@ export function useNaverMap(container: RefObject<HTMLDivElement>) {
       .catch(() => alive && setStatus("error"));
     return () => {
       alive = false;
-      map.current?.destroy();
+      quietly(() => map.current?.destroy());
       map.current = null;
     };
   }, [container]);

@@ -1,7 +1,7 @@
 import { useEffect, type MutableRefObject } from "react";
 import type { StationsResult } from "@shared/types";
 import { STATION_RADIUS_M } from "@shared/filters";
-import type { NaverMaps } from "@/lib/naverMaps";
+import { quietly, type NaverMaps } from "@/lib/naverMaps";
 
 type Station = StationsResult["stations"][number];
 
@@ -84,8 +84,8 @@ export function useStationMarkers(ready: boolean, maps: MutableRefObject<NaverMa
     const listeners = [m.Event.addListener(mp, "idle", redraw), m.Event.addListener(mp, "zoom_changed", redraw)];
     return () => {
       cancelAnimationFrame(frame);
-      m.Event.removeListener(listeners);
-      shapes.forEach((s) => s.setMap(null));
+      quietly(() => m.Event.removeListener(listeners));
+      quietly(() => shapes.forEach((s) => s.setMap(null)));
     };
   }, [ready, maps, map, stations]);
 }

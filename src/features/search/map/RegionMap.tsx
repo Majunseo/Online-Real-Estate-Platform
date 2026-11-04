@@ -184,8 +184,8 @@ function Breadcrumbs({ crumbs, onSelect }: Pick<Props, "crumbs" | "onSelect">) {
   );
 }
 
-/** 지도 키가 없거나 인증이 실패했을 때: 단계별 단추로 대신 고른다 */
-function MapFallback({ crumbs, sido, sgg, dong, sggList, dongList, onSelect }: Omit<Props, "query" | "total" | "list" | "onList">) {
+/** 지도 키가 없거나 인증이 실패했을 때: 단계별 단추로 대신 고른다 (지도 오류 울타리도 이 화면을 쓴다) */
+export function MapFallback({ crumbs, sido, sgg, dong, sggList, dongList, onSelect }: Omit<Props, "query" | "total" | "list" | "onList">) {
   const options: ChildRegion[] = sgg ? dongList : sido ? sggList : SIDO.map((s) => ({ code: s.code, name: s.short, count: 1 }));
   const current = dong ?? sgg ?? sido;
   return (

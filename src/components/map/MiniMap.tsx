@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Maximize2, Minimize2, Minus, Plus } from "lucide-react";
-import { loadNaverMaps, type NaverMaps } from "@/lib/naverMaps";
+import { loadNaverMaps, quietly, type NaverMaps } from "@/lib/naverMaps";
 import { openPanorama } from "@/lib/panorama";
 
 /**
@@ -45,8 +45,8 @@ export function MiniMap({ lat, lng, label, className = "h-[260px]", onStreetView
       .catch(() => alive && setFailed(true));
     return () => {
       alive = false;
-      thumb?.destroy?.();
-      mapObj.current?.destroy();
+      quietly(() => thumb?.destroy?.());
+      quietly(() => mapObj.current?.destroy());
       mapObj.current = null;
     };
   }, [lat, lng, label, wantsStreet]);

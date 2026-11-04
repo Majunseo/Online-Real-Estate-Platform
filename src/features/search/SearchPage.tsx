@@ -4,7 +4,8 @@ import type { RegionsResult, SearchResult } from "@shared/types";
 import { useJson } from "@/lib/api";
 import { FilterBar } from "./FilterBar";
 import { ResultsPanel } from "./ResultsPanel";
-import { RegionMap, type Crumb } from "./map/RegionMap";
+import { MapErrorBoundary } from "@/components/map/MapErrorBoundary";
+import { MapFallback, RegionMap, type Crumb } from "./map/RegionMap";
 import { useSearchState } from "./useSearchState";
 
 const PAGE = 60;
@@ -57,19 +58,34 @@ export function SearchPage() {
       <FilterBar key={sido?.code ?? "all"} q={q} placeholder="지역, 시군구, 단지 이름" onSubmit={submitQuery} list={conditions} onList={setList} place={crumbs.map((c) => c.name).join(" ")} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         <div className="h-[48vh] shrink-0 border-b border-line lg:h-auto lg:w-[45%] lg:border-b-0 lg:border-r">
-          <RegionMap
-            sido={sido?.code ?? null}
-            sgg={sgg}
-            dong={dong}
-            crumbs={crumbs}
-            sggList={sggList.data?.items ?? NONE}
-            dongList={dongList.data?.items ?? NONE}
-            query={where.toString()}
-            total={shown?.total ?? null}
-            onSelect={selectRegion}
-            list={conditions}
-            onList={setList}
-          />
+          {/* 지도 스크립트가 오류를 던져도 이 영역만 지역 단추 화면으로 바뀌게 한다 */}
+          <MapErrorBoundary
+            fallback={
+              <MapFallback
+                sido={sido?.code ?? null}
+                sgg={sgg}
+                dong={dong}
+                crumbs={crumbs}
+                sggList={sggList.data?.items ?? NONE}
+                dongList={dongList.data?.items ?? NONE}
+                onSelect={selectRegion}
+              />
+            }
+          >
+            <RegionMap
+              sido={sido?.code ?? null}
+              sgg={sgg}
+              dong={dong}
+              crumbs={crumbs}
+              sggList={sggList.data?.items ?? NONE}
+              dongList={dongList.data?.items ?? NONE}
+              query={where.toString()}
+              total={shown?.total ?? null}
+              onSelect={selectRegion}
+              list={conditions}
+              onList={setList}
+            />
+          </MapErrorBoundary>
         </div>
         <div className="lg:min-w-0 lg:flex-1 lg:overflow-y-auto">
           <ResultsPanel

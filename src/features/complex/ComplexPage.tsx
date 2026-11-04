@@ -9,6 +9,7 @@ import { rememberView } from "@/lib/recentViews";
 import { formatDate, formatManwon, toPyeong } from "@/lib/format";
 import { ComplexCard } from "@/components/listing/ComplexCard";
 import { ComplexThumb } from "@/components/listing/ComplexThumb";
+import { MapErrorBoundary } from "@/components/map/MapErrorBoundary";
 import { MiniMap } from "@/components/map/MiniMap";
 import { Notice } from "@/components/page/Page";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -175,7 +176,16 @@ export function ComplexPage() {
         <h2 id="map-title" className="section-title">
           위치
         </h2>
-        <MiniMap lat={c.lat} lng={c.lng} label={`${c.name} (${address})`} className="mt-4 h-[300px]" onStreetView={openStreet} />
+        <MapErrorBoundary
+          fallback={
+            <p className="mt-4 flex h-[300px] flex-col items-center justify-center gap-2 rounded-xl bg-band text-muted">
+              <MapPinOff className="h-8 w-8" aria-hidden="true" />
+              위치 지도를 불러오지 못했어요. 주소: {address}
+            </p>
+          }
+        >
+          <MiniMap lat={c.lat} lng={c.lng} label={`${c.name} (${address})`} className="mt-4 h-[300px]" onStreetView={openStreet} />
+        </MapErrorBoundary>
       </section>
 
       {nearby.length > 0 && (

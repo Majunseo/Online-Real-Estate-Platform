@@ -29,3 +29,16 @@ export function loadNaverMaps(): Promise<NaverMaps> {
   });
   return loading;
 }
+
+/**
+ * 지도 객체를 정리(리스너 떼기 · 지우기 · destroy)할 때 쓴다.
+ * 키 인증이 실패하면 네이버 지도 스크립트 안쪽이 망가져 정리 함수가 오류를 던진다. 그 오류가 화면(React)까지 올라가면
+ * 페이지 전체가 하얗게 꺼지므로, 정리 중 오류는 경고만 남기고 넘어간다.
+ */
+export function quietly(run: () => void): void {
+  try {
+    run();
+  } catch (err) {
+    console.warn("[지도] 정리하다 오류가 나서 건너뛰었어요 (지도 인증 실패 등)", err);
+  }
+}

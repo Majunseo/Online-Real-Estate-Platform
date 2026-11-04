@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import type { NaverMaps } from "@/lib/naverMaps";
+import { quietly, type NaverMaps } from "@/lib/naverMaps";
 import { areaStyle, type AreaState, type Layer } from "./sidoStyle";
 
 type Ring = [number, number][];
@@ -47,7 +47,7 @@ export function useBoundaryLayer({ ready, maps, map, layer, url, stateOf, onSele
   const paint = (code: string) => {
     const base = stateRef.current(code);
     const state = hovered.current === code && (base === "idle" || base === "empty") ? "hover" : base;
-    shapes.current.get(code)?.polygons.forEach((p) => p.setOptions(areaStyle(layer, state)));
+    quietly(() => shapes.current.get(code)?.polygons.forEach((p) => p.setOptions(areaStyle(layer, state))));
   };
 
   // 1) 파일을 받아 그린다 (url 이 바뀌면 지우고 새로)
@@ -95,8 +95,8 @@ export function useBoundaryLayer({ ready, maps, map, layer, url, stateOf, onSele
       });
     return () => {
       alive = false;
-      m.Event.removeListener(listeners);
-      shapes.current.forEach((s) => s.polygons.forEach((p) => p.setMap(null)));
+      quietly(() => m.Event.removeListener(listeners));
+      quietly(() => shapes.current.forEach((s) => s.polygons.forEach((p) => p.setMap(null))));
       shapes.current.clear();
       hovered.current = null;
       setLoadedUrl(null);

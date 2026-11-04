@@ -1,6 +1,6 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
 import type { PointsResult } from "@shared/types";
-import type { NaverMaps } from "@/lib/naverMaps";
+import { quietly, type NaverMaps } from "@/lib/naverMaps";
 import { formatShortPrice } from "@/lib/format";
 
 type Point = PointsResult["points"][number];
@@ -97,8 +97,8 @@ export function useClusteredMarkers(ready: boolean, maps: MutableRefObject<Naver
     const listeners = [m.Event.addListener(mp, "idle", redraw), m.Event.addListener(mp, "zoom_changed", redraw)];
     return () => {
       cancelAnimationFrame(frame);
-      m.Event.removeListener(listeners);
-      markers.forEach((mk) => mk.setMap(null));
+      quietly(() => m.Event.removeListener(listeners));
+      quietly(() => markers.forEach((mk) => mk.setMap(null)));
     };
   }, [ready, maps, map, points]);
 }
