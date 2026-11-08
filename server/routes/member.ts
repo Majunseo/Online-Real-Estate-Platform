@@ -33,6 +33,7 @@ import {
 import { computeBudget, validateBudget, type BudgetInput } from "../../shared/budget";
 import { fail, json, readJson, str } from "../http";
 import { requireUser, type Routes } from "../route";
+import { isOn } from "../bugs";
 
 /** 회원별 자료 API. 새 소식 · 문의를 빼면 모두 로그인이 필요하다 */
 
@@ -77,7 +78,8 @@ export const memberRoutes: Routes = {
   // ── 새 소식 (로그인 안 해도 전국 소식은 보인다) ──
   "GET /api/updates": (req, res) => {
     const user = currentUser(req);
-    return json(res, 200, { signedIn: Boolean(user), ...updatesFor(user ? favoriteIds(user.id) : []) });
+    // [F3] 결함: 로그인한 회원이 아니라 회원 번호 1(demo)의 관심 단지로 소식을 만든다
+    return json(res, 200, { signedIn: Boolean(user), ...updatesFor(user ? favoriteIds(isOn("F3") ? 1 : user.id) : []) });
   },
 
   // ── 내 집 내놓기 ──

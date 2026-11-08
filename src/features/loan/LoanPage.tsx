@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { clsx } from "clsx";
 import { BUYERS, ltvRule, maxLoan, RULE_BASIS, ZONE_LABEL, zoneOf, type Buyer } from "@shared/loanRules";
 import { formatManwon } from "@/lib/format";
+import { bugOn } from "@/lib/bugs";
 import { Page } from "@/components/page/Page";
 import { RegionSelect } from "@/components/form/RegionSelect";
 import { METHODS, schedule, won, yearly, type Method } from "./math";
@@ -52,7 +53,8 @@ export function LoanPage() {
   const fromSido = /^\d{2}$/.test(params.get("sido") ?? "") ? params.get("sido")! : "";
   const fromSgg = fromSido && /^\d{5}$/.test(params.get("sgg") ?? "") && params.get("sgg")!.startsWith(fromSido) ? params.get("sgg")! : "";
   const fromBuyer = isBuyer(params.get("buyer")) ? (params.get("buyer") as Buyer) : "none";
-  const firstZone = zoneOf(fromSido || null, fromSgg || null);
+  let firstZone = zoneOf(fromSido || null, fromSgg || null);
+  if (bugOn("F4") && fromSido === "41" && firstZone?.zone === "regulated") firstZone = { zone: "metro", uncertain: false }; // [F4]
   const firstLoan = firstZone ? maxLoan(fromPrice, ltvRule(firstZone.zone, fromBuyer, fromPrice)) : Math.round(fromPrice * 0.6);
 
   const [v, setV] = useState<Inputs>({
@@ -76,7 +78,9 @@ export function LoanPage() {
   const dsr = ok && s && c.income > 0 ? (yearly(s)[0].payment / (c.income * 10_000)) * 100 : null;
 
   // 지역 · 구매자 구분에 따른 한도
-  const zone = zoneOf(v.sido || null, v.sgg || null);
+  let zone = zoneOf(v.sido || null, v.sgg || null);
+  // [F4] 결함: 경기도 안 규제지역(과천 · 분당 · 수지 …)을 수도권 비규제로 본다
+  if (bugOn("F4") && v.sido === "41" && zone?.zone === "regulated") zone = { zone: "metro", uncertain: false };
   const rule = zone && c.price > 0 ? ltvRule(zone.zone, v.buyer, c.price) : null;
   const limit = rule ? maxLoan(c.price, rule) : null;
   const overLimit = limit !== null && c.loan > limit;
