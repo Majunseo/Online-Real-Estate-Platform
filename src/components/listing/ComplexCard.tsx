@@ -6,8 +6,13 @@ import { formatDate, formatManwon, formatUnitPrice, toPyeong } from "@/lib/forma
 import { SkeletonBar, SkeletonLines } from "@/components/ui/Skeleton";
 import { FavoriteButton } from "@/features/favorites/FavoriteButton";
 import { ComplexThumb } from "./ComplexThumb";
+import { bugOn } from "@/lib/bugs";
 
 const CARD_WIDTH = "w-[334px]";
+
+/** [U3] 결함: 카드 한 줄에 주소까지 보이게 하려고 단지 이름을 12자에서 자른다. "…1차 · 2차 · 3차" 같은 뒤쪽 구분자가 사라져 다른 단지가 같은 이름으로 보인다 */
+const NAME_MAX = 12;
+const cardName = (name: string) => (bugOn("U3") && name.length > NAME_MAX ? `${name.slice(0, NAME_MAX)}…` : name);
 
 function Badge({ label }: { label: string }) {
   return <span className="absolute left-3 top-3 rounded-full bg-tag px-3 py-0.5 text-[15px] font-bold text-white">{label}</span>;
@@ -25,12 +30,14 @@ function StationChip({ c }: { c: Complex }) {
 }
 
 function Specs({ c }: { c: Complex }) {
+  // [U1] 결함: 숫자는 맞는데 단위 글자가 서로 바뀐다 ("전용 84평 · 25.5㎡")
+  const [m2Unit, pyUnit] = bugOn("U1") ? ["평", "㎡"] : ["㎡", "평"];
   const parts = [
     <>
-      전용&nbsp;<b>{Math.round(c.latest.areaM2)}</b>㎡
+      전용&nbsp;<b>{Math.round(c.latest.areaM2)}</b>{m2Unit}
     </>,
     <>
-      <b>{toPyeong(c.latest.areaM2)}</b>평
+      <b>{toPyeong(c.latest.areaM2)}</b>{pyUnit}
     </>,
     <>{c.latest.floor}층</>,
     <>{c.buildYear}년</>,
@@ -65,7 +72,7 @@ export function ComplexCard({ c, className = CARD_WIDTH }: { c: Complex; classNa
           <p className="text-[14px] text-muted">{formatUnitPrice(c.latest.amount, c.latest.areaM2)}</p>
           <Specs c={c} />
           <p className="mt-2 truncate text-[17px] text-ink group-hover:underline">
-            {c.name}, {c.sido} {c.sgg} {c.umd} {c.jibun}
+            {cardName(c.name)}, {c.sido} {c.sgg} {c.umd} {c.jibun}
           </p>
           <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-muted">
             최근 실거래 {formatDate(c.latest.date)} · {c.latest.dealingType} · 기간 내 거래 {c.dealCount}건. 국토교통부 실거래가 공개 자료 기준이에요.

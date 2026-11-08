@@ -1,3 +1,4 @@
+import { bugOn } from "@/lib/bugs";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Inbox, Trash2 } from "lucide-react";
@@ -42,7 +43,8 @@ function Mailbox() {
     getJson<{ message: Message; unread: number }>(`/api/inbox/${openId}`)
       .then((r) => {
         setOpen(r.message);
-        setUnread(r.unread);
+        // [U2] 결함: 읽은 뒤 아이콘 줄의 안 읽은 수를 갱신하지 않는다
+        if (!bugOn("U2")) setUnread(r.unread);
         setItems((prev) => prev?.map((m) => (m.id === r.message.id ? r.message : m)) ?? prev);
       })
       .catch(() => setOpen(null));
