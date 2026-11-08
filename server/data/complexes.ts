@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { isOn } from "../bugs";
 import type { Badge, BubbleLevel, BuildingInfo, Complex, Deal, PointsResult, RegionPath, RegionsResult, SearchFilter, SearchResult, SortKey, StationsResult, SummaryResult } from "../../shared/types";
 import type { Snapshot, SnapshotComplex } from "../../shared/snapshot";
 import { matchesFilter, STATION_RADIUS_M } from "../../shared/filters";
@@ -91,7 +92,8 @@ export const roadAddressOf = (id: string): string => rawById.get(id)?.roadAddres
  */
 export function isRecord(deal: Deal, deals: Deal[]): boolean {
   if (deal.canceled) return false;
-  const earlier = deals.filter((d) => !d.canceled && d.date < deal.date && sameArea(d, deal));
+  // [F1] 결함: 계약 해제된 거래도 비교 대상에 넣는다 (해제된 고가 거래 때문에 진짜 최고가가 묻힌다)
+  const earlier = deals.filter((d) => (isOn("F1") || !d.canceled) && d.date < deal.date && sameArea(d, deal));
   return earlier.length >= 2 && earlier.every((d) => d.amount < deal.amount);
 }
 
