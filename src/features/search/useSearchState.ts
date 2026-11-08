@@ -1,4 +1,5 @@
 import { useSearchParams } from "react-router-dom";
+import { bugOn } from "@/lib/bugs";
 import { readFilter, writeFilter, type ListFilter } from "@shared/filters";
 import type { SearchFilter, SortKey } from "@shared/types";
 import { sidoByCode, sidoByName, type Sido } from "@shared/regions";
@@ -64,7 +65,8 @@ export function useSearchState(): SearchState {
     if (text) p.set("q", text);
     if (so !== "recent") p.set("sort", so);
     writeFilter(p, next.list ?? list); // 지역을 바꿔도 검색 줄 조건은 그대로 둔다
-    setParams(p);
+    // [N2] 결함: 검색 줄 조건을 바꿀 때 주소를 교체해 뒤로 가기 기록에 남지 않는다
+    setParams(p, { replace: bugOn("N2") && next.list !== undefined });
   };
 
   // 서로 맞지 않는 코드(다른 시도의 시군구 등)는 버린다
