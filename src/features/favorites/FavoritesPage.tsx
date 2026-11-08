@@ -6,14 +6,16 @@ import { getJson, sendJson, useJson } from "@/lib/api";
 import { ComplexCard } from "@/components/listing/ComplexCard";
 import { Notice, Page, RequireLogin } from "@/components/page/Page";
 import { useFavorites } from "./FavoritesProvider";
+import { RecentViews } from "./RecentViews";
 
-/** 관심 단지: 하트를 누른 단지 모음(여기서 하트를 다시 누르면 빠진다)과 저장한 검색 */
+/** 관심 단지: 하트를 누른 단지 모음(여기서 하트를 다시 누르면 빠진다) · 저장한 검색 · 최근 본 단지 */
 export function FavoritesPage() {
   return (
-    <Page title="관심 단지" description="담아 둔 단지와 저장한 검색을 모아 봤어요.">
+    <Page title="관심 단지" description="담아 둔 단지 · 저장한 검색 · 최근 본 단지를 모아 봤어요.">
       <RequireLogin what="관심 단지">
         <SavedSearches />
         <FavoriteList />
+        <RecentViews variant="section" />
       </RequireLogin>
     </Page>
   );
@@ -32,12 +34,21 @@ function SavedSearches() {
   useEffect(() => {
     getJson<{ items: SavedSearch[] }>("/api/saved-searches").then((r) => setItems(r.items));
   }, []);
-  if (!items?.length) return null;
+  if (items === null) return null;
   return (
     <section aria-labelledby="saved-title" className="mb-10">
       <h2 id="saved-title" className="text-[20px] font-bold">
         저장한 검색 {items.length}개
       </h2>
+      {items.length === 0 && (
+        <p className="mt-3 flex items-center gap-2 rounded-xl bg-band px-4 py-4 text-[15px] text-muted">
+          <Search className="h-5 w-5 shrink-0" aria-hidden="true" />
+          지도 검색 줄 오른쪽의 "검색 저장"을 누르면 그때의 지역 · 조건이 여기에 남아요.{" "}
+          <Link to="/search" className="font-bold text-brand hover:underline">
+            지도로 가기
+          </Link>
+        </p>
+      )}
       <ul className="mt-3 flex flex-wrap gap-2">
         {items.map((s) => (
           <li key={s.id} className="flex items-center rounded-full border-[1.5px] border-muted/50 pl-4 pr-1">

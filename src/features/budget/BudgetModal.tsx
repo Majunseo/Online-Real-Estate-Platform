@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import { clsx } from "clsx";
-import { computeBudget, DSR_MAX, DSR_TARGET, LTV, validateBudget, type BudgetErrors, type BudgetInput } from "@shared/budget";
+import { budgetRule, computeBudget, DSR_MAX, DSR_TARGET, validateBudget, type BudgetErrors, type BudgetInput } from "@shared/budget";
+import { ZONE_LABEL } from "@shared/loanRules";
 import { ApiError } from "@/lib/api";
 import { formatManwon } from "@/lib/format";
 import { RegionSelect } from "@/components/form/RegionSelect";
@@ -167,7 +168,12 @@ export function BudgetModal({ initial, onClose, onSave, savedToAccount }: { init
               <p className="text-[15px] text-muted">다 입력하면 여기에 미리 보여 드려요.</p>
             )}
             <p className="mt-1.5 text-[13px] text-muted">
-              목표는 연소득의 {DSR_TARGET * 100}%, 최대는 {DSR_MAX * 100}%(DSR 한도)까지 원리금을 갚는다고 보고, 대출은 매매가의 {LTV * 100}%까지로 계산해요. 실제 한도는 은행 · 지역 규제에 따라 달라요.
+              목표는 연소득의 {DSR_TARGET * 100}%, 최대는 {DSR_MAX * 100}%(DSR 한도)까지 원리금을 갚는다고 보고, 대출은 관심 지역의 LTV 까지로 계산해요
+              {f.sido && (() => {
+                const r = budgetRule({ sido: f.sido, sgg: f.sgg || null });
+                return ` (${ZONE_LABEL[r.zone]} · 무주택 LTV ${Math.round(r.ltv * 100)}%${r.cap !== null ? ` · 한도 ${formatManwon(r.cap)}` : ""})`;
+              })()}
+              . 실제 한도는 은행 심사 · 소득에 따라 달라요.
             </p>
           </div>
           <p className="mt-3 text-[13px] text-muted">{savedToAccount ? "입력한 값은 내 계정에 저장돼요." : "로그인 전이라 입력한 값은 이 브라우저에만 저장돼요."}</p>

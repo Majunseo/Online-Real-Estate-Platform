@@ -2,6 +2,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import { NAV_LEFT, NAV_RIGHT, type NavItem } from "@/config/site";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { Logo } from "./Logo";
+import { MobileMenu } from "./MobileMenu";
 
 function NavLinks({ items }: { items: NavItem[] }) {
   return (
@@ -40,18 +41,22 @@ function Account() {
   );
 }
 
-/** 맨 위 머리글. 왼쪽 메뉴 · 가운데 로고 · 오른쪽 메뉴와 로그인. 스크롤하면 함께 올라간다. */
+/**
+ * 맨 위 머리글. 왼쪽 메뉴 · 가운데 로고 · 오른쪽 메뉴와 로그인. 스크롤하면 함께 올라간다.
+ * 1024px 미만에서는 양쪽 메뉴 대신 로고 · 로그인 · 메뉴 단추(≡)만 남고, 메뉴는 서랍으로 연다.
+ */
 export function TopNav() {
   return (
     <header className="relative border-b border-line bg-surface">
-      <nav aria-label="주 메뉴" className="mx-auto flex h-[76px] max-w-page items-center justify-between px-6 lg:px-28">
+      <nav aria-label="주 메뉴" className="mx-auto flex h-[76px] max-w-page items-center justify-between px-4 sm:px-6 lg:px-28">
         <NavLinks items={NAV_LEFT} />
         <div className="lg:absolute lg:left-1/2 lg:-translate-x-1/2">
           <Logo />
         </div>
-        <div className="flex items-center gap-10">
+        <div className="flex items-center gap-3 lg:gap-10">
           <NavLinks items={NAV_RIGHT} />
           <Account />
+          <MobileMenu />
         </div>
       </nav>
     </header>

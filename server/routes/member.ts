@@ -27,6 +27,7 @@ import {
   findInquiry,
   inquiriesOf,
   ticketOf,
+  clearRecentViews,
   rememberRecentView,
 } from "../db/member";
 import { computeBudget, validateBudget, type BudgetInput } from "../../shared/budget";
@@ -173,6 +174,13 @@ export const memberRoutes: Routes = {
     const id = str(b.complexId);
     if (!complexById.has(id)) return fail(res, 404, { error: "not_found", message: "없는 단지예요." });
     rememberRecentView(user.id, id);
+    return json(res, 200, { ok: true });
+  },
+
+  "DELETE /api/recent-views": (req, res) => {
+    const user = requireUser(req, res);
+    if (!user) return true;
+    clearRecentViews(user.id);
     return json(res, 200, { ok: true });
   },
 

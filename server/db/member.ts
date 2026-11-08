@@ -248,6 +248,11 @@ export function rememberRecentView(userId: number, complexId: string): void {
   });
 }
 
+/** 최근 본 단지 기록을 모두 지운다 */
+export function clearRecentViews(userId: number): void {
+  db.prepare("DELETE FROM recent_views WHERE user_id = ?").run(userId);
+}
+
 /** 최근 본 단지 id (최근 것이 앞) */
 export function recentViewIds(userId: number): string[] {
   return (db.prepare("SELECT complex_id FROM recent_views WHERE user_id = ? ORDER BY viewed_at DESC LIMIT ?").all(userId, RECENT_MAX) as { complex_id: string }[]).map((r) => r.complex_id);

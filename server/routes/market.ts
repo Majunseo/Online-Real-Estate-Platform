@@ -16,6 +16,15 @@ const filterFrom = (url: URL): SearchFilter => ({
 
 const pick = <T extends string>(value: string | null, allowed: readonly T[], fallback: T): T => (allowed.includes(value as T) ? (value as T) : fallback);
 
+/** 전용면적 범위 (㎡, 양의 정수만). 잘못된 값은 제한 없음으로 */
+const areaFrom = (url: URL) => {
+  const n = (k: string) => {
+    const v = Number(url.searchParams.get(k));
+    return Number.isInteger(v) && v > 0 ? v : null;
+  };
+  return { areaMin: n("areaMin"), areaMax: n("areaMax") };
+};
+
 export const marketRoutes: Routes = {
   "GET /api/complexes/:id": (_req, res, _url, { id }) => {
     const detail = complexDetail(id);
@@ -28,6 +37,7 @@ export const marketRoutes: Routes = {
       200,
       listDeals(
         filterFrom(url),
+        areaFrom(url),
         pick<DealFilter>(url.searchParams.get("filter"), ["all", "record", "canceled"], "all"),
         pick<DealPeriod>(url.searchParams.get("period"), ["all", "month"], "all"),
         pick<DealSort>(url.searchParams.get("sort"), ["recent", "price-desc"], "recent"),

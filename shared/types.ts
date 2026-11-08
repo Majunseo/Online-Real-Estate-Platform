@@ -115,7 +115,7 @@ export interface SearchResult {
   q: string;
   total: number;
   items: Complex[]; // 앞에서 limit 곳
-  info: { source: string; months: string[]; sggCount: number };
+  info: DataInfo;
 }
 
 /** GET /api/complexes/points 응답: 지도에 찍을 점 전부. [단지 id, 위도, 경도, 최근 실거래가(만원)] */
@@ -176,9 +176,27 @@ export type DealPeriod = "all" | "month";
 /** 실거래가 목록 정렬: 최근 계약순 · 가격 높은 순 */
 export type DealSort = "recent" | "price-desc";
 
+/** 실거래가 자료 출처 · 범위. 바닥글의 "자료 기준" 줄과 검색 결과가 함께 쓴다 */
+export interface DataInfo {
+  source: string;
+  /** 받아 온 시각 (ISO). 스냅숏이 없으면 null */
+  fetchedAt: string | null;
+  months: string[];
+  sggCount: number;
+}
+
+/** 실거래가 목록의 전용면적 범위 (㎡). null 은 제한 없음 */
+export interface AreaRange {
+  areaMin: number | null;
+  areaMax: number | null;
+}
+
 /** GET /api/deals */
 export interface DealsResult {
   region: RegionPath;
+  /** 단지 · 동 이름 검색어 (정리한 값) */
+  q: string;
+  area: AreaRange;
   filter: DealFilter;
   period: DealPeriod;
   sort: DealSort;

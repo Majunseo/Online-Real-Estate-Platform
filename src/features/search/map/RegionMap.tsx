@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useNavigationType } from "react-router-dom";
 import { ChevronRight, MapPinOff, Minus, Plus, X } from "lucide-react";
 import type { BubbleLevel, PointsResult, RegionBubble, RegionRef, StationsResult, SummaryResult } from "@shared/types";
 import type { ListFilter } from "@shared/filters";
@@ -45,6 +45,32 @@ const NO_STATIONS: StationsResult["stations"] = [];
 /** 이만큼 확대하면 지역 묶음 대신 단지별 가격 핀을 보여 준다 (동을 고르면 확대와 상관없이 핀) */
 const PIN_ZOOM = 15;
 const overlayButton = "pointer-events-auto flex items-center gap-2 rounded-lg border-[1.5px] bg-surface px-4 text-[17px] font-bold shadow-sm hover:bg-band";
+
+/**
+ * 이용자가 마지막으로 보던 지도 위치 · 확대. 지역마다 따로 sessionStorage 에 두어,
+ * 단지 상세에 갔다가 뒤로 오거나 새로 고침했을 때(POP) 지역 경계에 다시 맞추지 않고 보던 화면으로 돌아온다.
+ */
+interface MapView {
+  lat: number;
+  lng: number;
+  zoom: number;
+}
+const viewKey = (deepest: string | null) => `jipteo.map-view:${deepest ?? "all"}`;
+function readView(key: string): MapView | null {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(key) ?? "null");
+    return v && Number.isFinite(v.lat) && Number.isFinite(v.lng) && Number.isFinite(v.zoom) ? v : null;
+  } catch {
+    return null;
+  }
+}
+function writeView(key: string, v: MapView) {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(v));
+  } catch {
+    /* 저장 공간이 막혀 있으면 기억하지 않는다 */
+  }
+}
 
 /**
  * 왼쪽 지도. 시도 → 시군구 → 동 순서로 경계를 눌러 들어가고, 고른 곳은 파란 얇은 테두리로 보여 준다.
@@ -95,8 +121,32 @@ export function RegionMap({ sido, sgg, dong, crumbs, sggList, dongList, query, t
   const deepest = dong ?? sgg ?? sido;
   const deepestLayer = dong ? dongLayer : sgg ? sggLayer : sidoLayer;
   const fitted = useRef<string | null | undefined>(undefined);
+  const navType = useNavigationType();
+
+  // 지도가 멈출 때마다(idle) 지금 지역의 보던 화면을 기억한다. 경계에 맞추는 중(fitted 가 아직 아님)에는 기억하지 않는다
+  const deepestRef = useRef(deepest);
+  deepestRef.current = deepest;
+  useEffect(() => {
+    if (!ready || !map.current || !maps.current) return;
+    const m = maps.current;
+    const listener = m.Event.addListener(map.current, "idle", () => {
+      if (!map.current || fitted.current !== deepestRef.current) return;
+      const c = map.current.getCenter();
+      writeView(viewKey(deepestRef.current), { lat: typeof c.lat === "function" ? c.lat() : c.y, lng: typeof c.lng === "function" ? c.lng() : c.x, zoom: map.current.getZoom() });
+    });
+    return () => m.Event.removeListener(listener);
+  }, [ready, map, maps]);
+
   useEffect(() => {
     if (!ready || fitted.current === deepest) return;
+    // 뒤로 가기 · 새로 고침으로 돌아왔으면 이 지역에서 마지막으로 보던 화면으로
+    const saved = navType === "POP" ? readView(viewKey(deepest)) : null;
+    if (saved) {
+      map.current?.setCenter(new maps.current.LatLng(saved.lat, saved.lng));
+      map.current?.setZoom(saved.zoom);
+      fitted.current = deepest;
+      return;
+    }
     if (!deepest) {
       map.current?.morph(new maps.current.LatLng(KOREA_VIEW.lat, KOREA_VIEW.lng), KOREA_VIEW.zoom);
       fitted.current = null;
@@ -128,12 +178,13 @@ export function RegionMap({ sido, sgg, dong, crumbs, sggList, dongList, query, t
       {/* 네이버 지도가 이 상자의 position 을 relative 로 바꾸므로 inset 대신 크기를 준다 */}
       <div ref={box} className="h-full w-full" />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
-        <div className="pointer-events-auto rounded-lg bg-ink/75 px-4 py-2.5 text-white">
+      {/* 좁은 화면에서는 지역 경로 아래에 단추가 내려온다 */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-2 p-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:p-4">
+        <div className="pointer-events-auto max-w-full rounded-lg bg-ink/75 px-4 py-2.5 text-white">
           <Breadcrumbs crumbs={crumbs} onSelect={onSelect} />
           <p className="mt-0.5 text-[15px] text-white/85">{deepest ? `단지 ${total ?? "…"}곳` : "지도에서 시도를 눌러 보세요"}</p>
         </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
           <SchoolMenu list={list} onList={onList} buttonClassName="pointer-events-auto flex h-12 shrink-0 items-center gap-2 rounded-lg border-[1.5px] px-4 text-[17px] font-bold shadow-sm hover:bg-band" />
           {deepest && (
             <button type="button" onClick={() => onSelect(null)} className={`${overlayButton} h-12 shrink-0 border-brand`}>

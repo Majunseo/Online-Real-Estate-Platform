@@ -2,7 +2,31 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, Smartphone } from "lucide-react";
 import { clsx } from "clsx";
+import type { DataInfo } from "@shared/types";
+import { useJson } from "@/lib/api";
+import { formatDate } from "@/lib/format";
 import { FOOTER_GROUPS, FOOTER_LINKS, SITE, type FooterGroup } from "@/config/site";
+
+/** "2026-08" … "2026-10" → "2026년 8~10월" */
+function monthRange(months: string[]): string {
+  if (!months.length) return "";
+  const [y1, m1] = months[0].split("-").map(Number);
+  const [y2, m2] = months[months.length - 1].split("-").map(Number);
+  if (months.length === 1) return `${y1}년 ${m1}월`;
+  return y1 === y2 ? `${y1}년 ${m1}~${m2}월` : `${y1}년 ${m1}월~${y2}년 ${m2}월`;
+}
+
+/** 자료 기준 줄: 받아 온 날짜 · 계약 기간 · 시군구 수. 서버에서 한 번 받는다 */
+function DataBasis() {
+  const { data } = useJson<DataInfo>("/api/data-info");
+  if (!data?.fetchedAt) return null;
+  const date = formatDate(data.fetchedAt.slice(0, 10));
+  return (
+    <p>
+      자료 기준 <strong>{date}</strong> 수집 · {monthRange(data.months)} 계약분 · {data.sggCount}개 시군구. 계약 뒤 30일 안에 신고되므로 최근 거래는 늦게 보일 수 있어요.
+    </p>
+  );
+}
 
 function Group({ group }: { group: FooterGroup }) {
   const [open, setOpen] = useState(false);
@@ -69,6 +93,7 @@ export function SiteFooter() {
           {SITE.name}는 아파트 실거래가를 보여 주는 <strong>웹 테스트용 사이트</strong>입니다. 실거래 정보의 출처는 국토교통부 실거래가 공개 자료(공공데이터포털)입니다.
         </p>
         <p>단지 · 가격 · 거래는 실제 공공데이터이며 일부 시군구만 모아 두었습니다. 중개사무소 목록은 화면 확인용 가상 자료입니다.</p>
+        <DataBasis />
         <p>© 2026 {SITE.name}</p>
       </div>
 

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { activeCount, writeFilter } from "@shared/filters";
 import type { RegionsResult, SearchResult } from "@shared/types";
-import { useJson } from "@/lib/api";
+import { getJson, useJson } from "@/lib/api";
+import { matchRegion, targetOf, type Suggestion } from "@/components/search/SuggestSearch";
 import { FilterBar } from "./FilterBar";
 import { ResultsPanel } from "./ResultsPanel";
 import { MapErrorBoundary } from "@/components/map/MapErrorBoundary";
@@ -13,7 +15,25 @@ const NONE: never[] = [];
 
 /** 매매 검색. 위에 검색 줄, 왼쪽 지도 · 오른쪽 목록 (좁은 화면에서는 지도 아래 목록) */
 export function SearchPage() {
+  const navigate = useNavigate();
   const { sido, sgg, dong, q, sort, list: conditions, filter, selectRegion, submitQuery, setSort, setList } = useSearchState();
+
+  /** 자동완성 후보: 지역이면 지도가 그 경계로 들어가고, 단지면 단지 상세로 간다 */
+  const pick = (s: Suggestion) => (s.kind === "complex" ? navigate(targetOf(s)) : selectRegion(s.code));
+
+  /**
+   * 글자로 제출: "수지구" · "용인시 수지구" 처럼 시군구 · 동 이름 그대로면 그 경계로 들어간다 (같은 이름이 여럿이면 지금 시도 안의 것).
+   * 지역 이름이 아니면 단지 이름 검색어로 쓴다. 후보를 받지 못해도 검색어로는 간다.
+   */
+  const submit = async (text: string) => {
+    const t = text.trim();
+    if (t) {
+      const items = await getJson<{ items: Suggestion[] }>(`/api/suggest?q=${encodeURIComponent(t)}`).then((r) => r.items, () => []);
+      const region = matchRegion(items, t, sido?.code);
+      if (region) return selectRegion(region.code);
+    }
+    submitQuery(t);
+  };
   // 지역 · 검색어가 없어도 검색 줄 조건을 걸면 전국에서 찾는다
   const asked = Boolean(sido || q || activeCount(conditions) > 0);
 
@@ -54,8 +74,8 @@ export function SearchPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 지역이 바뀌거나 경계를 지우면 검색창도 새로 (예: "서울" 입력 → 서울 선택 뒤 글자가 남지 않게) */}
-      <FilterBar key={sido?.code ?? "all"} q={q} placeholder="지역, 시군구, 단지 이름" onSubmit={submitQuery} list={conditions} onList={setList} place={crumbs.map((c) => c.name).join(" ")} />
+      {/* 지역이 바뀌거나 경계를 지우면 검색창도 새로 (예: "수지구" 입력 → 수지구 선택 뒤 글자가 남지 않게. 고른 지역은 지도 위 경로에 보인다) */}
+      <FilterBar key={dong ?? sgg ?? sido?.code ?? "all"} q={q} placeholder="지역, 시군구, 단지 이름" onSubmit={submit} onPick={pick} list={conditions} onList={setList} place={crumbs.map((c) => c.name).join(" ")} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         <div className="h-[48vh] shrink-0 border-b border-line lg:h-auto lg:w-[45%] lg:border-b-0 lg:border-r">
           {/* 지도 스크립트가 오류를 던져도 이 영역만 지역 단추 화면으로 바뀌게 한다 */}

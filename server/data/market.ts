@@ -1,4 +1,4 @@
-import type { ComplexDetail, DealFilter, DealPeriod, DealRow, DealSort, DealsResult, SearchFilter, UpdateItem } from "../../shared/types";
+import type { AreaRange, ComplexDetail, DealFilter, DealPeriod, DealRow, DealSort, DealsResult, SearchFilter, UpdateItem } from "../../shared/types";
 import { complexById, complexes, dealsOf, isRecord, newestDate, normalizeFilter, roadAddressOf } from "./complexes";
 
 /** 실거래가 스냅숏으로 만드는 화면 자료: 단지 상세 · 실거래가 목록 · 새 소식 */
@@ -36,22 +36,31 @@ const allRows: (DealRow & { sggCode: string })[] = complexes
 /** 가격 높은 순: 계약 해제된 거래는 실제로 거래된 값이 아니므로 맨 뒤로 보낸다 */
 const byPrice = (a: DealRow, b: DealRow) => Number(a.deal.canceled) - Number(b.deal.canceled) || b.deal.amount - a.deal.amount || b.deal.date.localeCompare(a.deal.date);
 
-/** GET /api/deals?sido=&sgg=&filter=record|canceled&period=month&sort=recent|price-desc&page= */
-export function listDeals(raw: SearchFilter, filter: DealFilter, period: DealPeriod, sort: DealSort, page: number): DealsResult {
-  const { filter: f, region } = normalizeFilter({ ...raw, dong: null, q: "" });
+/**
+ * GET /api/deals?sido=&sgg=&q=&areaMin=&areaMax=&filter=record|canceled&period=month&sort=recent|price-desc&page=
+ * q 는 띄어쓰기로 나눈 낱말이 모두 단지 이름이나 동 이름에 들어 있어야 한다. 면적은 전용 ㎡ 로 견준다 (반올림한 값).
+ */
+export function listDeals(raw: SearchFilter, area: AreaRange, filter: DealFilter, period: DealPeriod, sort: DealSort, page: number): DealsResult {
+  const { filter: f, region } = normalizeFilter({ ...raw, dong: null });
   const short = region.sido?.name;
+  const words = f.q.split(/\s+/).filter(Boolean);
   const rows = allRows.filter(
     (r) =>
       (!short || r.sido === short) &&
       (!f.sgg || r.sggCode === f.sgg) &&
       (period === "all" || withinDays(r.deal.date, 30)) &&
-      (filter === "all" || (filter === "record" ? r.record : r.deal.canceled)),
+      (filter === "all" || (filter === "record" ? r.record : r.deal.canceled)) &&
+      (area.areaMin === null || Math.round(r.deal.areaM2) >= area.areaMin) &&
+      (area.areaMax === null || Math.round(r.deal.areaM2) <= area.areaMax) &&
+      words.every((w) => `${r.complexName} ${r.umd}`.includes(w)),
   );
   if (sort === "price-desc") rows.sort(byPrice); // allRows 는 이미 최근 계약순
   const pages = Math.max(1, Math.ceil(rows.length / DEALS_PAGE_SIZE));
   const p = Math.min(Math.max(1, page), pages);
   return {
     region,
+    q: f.q,
+    area,
     filter,
     period,
     sort,

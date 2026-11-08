@@ -97,6 +97,7 @@ export function isRecord(deal: Deal, deals: Deal[]): boolean {
 
 export const dataInfo: SearchResult["info"] = {
   source: snapshot?.source ?? "실거래가 스냅숏 없음",
+  fetchedAt: snapshot?.fetchedAt ?? null,
   months: snapshot?.months ?? [],
   sggCount: snapshot?.sgg.filter((s) => s.deals > 0).length ?? 0, // 실거래가를 받아 온 시군구 수
 };

@@ -84,11 +84,24 @@ function SellBody() {
 
 const EMPTY = { building: "", unit: "", area: "", floor: "", price: "", contact: "", description: "" };
 
+/**
+ * 호수에서 층을 읽는다: 1203호 → 12층, 503호 → 5층. 세 자리 · 네 자리 호수만 확실하고, 그 밖(두 자리 · 다섯 자리 · 지하 B101)은 모른다(null).
+ * 4층을 건너뛰는 단지 · 복층처럼 호수와 층이 어긋나는 곳이 있어, 채워 주기만 하고 틀렸다고 막지는 않는다.
+ */
+export function floorFromUnit(unit: string): number | null {
+  const digits = unit.trim();
+  if (!/^\d{3,4}$/.test(digits)) return null;
+  const floor = Number(digits.slice(0, digits.length - 2));
+  return floor >= 1 ? floor : null;
+}
+
 function ListingForm({ onCreated }: { onCreated: (l: Listing) => void }) {
   const [complex, setComplex] = useState<Picked | null>(null);
   const [detail, setDetail] = useState<ComplexDetail | null>(null);
   const areas = detail?.areas ?? [];
   const [f, setF] = useState(EMPTY);
+  // 층을 직접 고친 뒤에는 호수를 바꿔도 다시 덮어쓰지 않는다
+  const [floorTouched, setFloorTouched] = useState(false);
   const [errors, setErrors] = useState<ListingErrors>({});
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
@@ -110,7 +123,24 @@ function ListingForm({ onCreated }: { onCreated: (l: Listing) => void }) {
       : f.floor.trim() && registryMax === null && maxSeenFloor !== null && floorNum > maxSeenFloor
         ? `거래 기록상 가장 높은 층(${maxSeenFloor}층)보다 높아요. 층수가 맞는지 확인해 주세요.`
         : null;
-  const floorHint = registryMax !== null ? `이 단지 최고 ${registryMax}층 (건축물대장)` : maxSeenFloor !== null ? `거래 기록상 최고 ${maxSeenFloor}층 (실제 최고층은 더 높을 수 있어요)` : undefined;
+  const maxHint = registryMax !== null ? `이 단지 최고 ${registryMax}층 (건축물대장)` : maxSeenFloor !== null ? `거래 기록상 최고 ${maxSeenFloor}층 (실제 최고층은 더 높을 수 있어요)` : undefined;
+  // 호수 → 층: 자동으로 채웠으면 그렇다고 알리고, 사용자가 다르게 고쳤으면 보통 몇 층인지만 알려 준다 (4층 없는 단지 등이 있어 막지 않는다)
+  const derivedFloor = floorFromUnit(f.unit);
+  const unitHint =
+    derivedFloor === null || !f.floor.trim()
+      ? undefined
+      : floorNum === derivedFloor
+        ? floorTouched
+          ? undefined
+          : "호수에서 채웠어요. 다르면 고쳐 주세요"
+        : `${f.unit.trim()}호면 보통 ${derivedFloor}층이에요`;
+  const floorHint = [unitHint, maxHint].filter(Boolean).join(" · ") || undefined;
+
+  // 호수를 치면 층을 채운다 (사용자가 층을 직접 고친 뒤에는 그대로 둔다)
+  const setUnit = (unit: string) => {
+    const derived = floorFromUnit(unit);
+    setF((prev) => ({ ...prev, unit, floor: !floorTouched && derived !== null ? String(derived) : prev.floor }));
+  };
 
   // 고른 면적의 최근 3개월 실거래 (계약 해제 제외)
   const areaDeals = detail && f.area ? detail.deals.filter((d) => !d.canceled && Math.round(d.areaM2) === Number(f.area)) : [];
@@ -141,6 +171,7 @@ function ListingForm({ onCreated }: { onCreated: (l: Listing) => void }) {
       onCreated(r.item);
       setDone(`${r.item.complexName} ${r.item.building}동 ${r.item.unit}호를 등록했어요. 메시지함에 안내를 보냈어요.`);
       setF(EMPTY);
+      setFloorTouched(false);
       setComplex(null);
       refresh();
     } catch (err) {
@@ -157,7 +188,7 @@ function ListingForm({ onCreated }: { onCreated: (l: Listing) => void }) {
       <ComplexPicker value={complex} onChange={setComplex} error={errors.complexId} />
       <div className="grid grid-cols-2 gap-3">
         <Field id="sell-building" label="동" inputMode="numeric" required value={f.building} onChange={(e) => set("building", e.target.value)} error={errors.building} placeholder="101" />
-        <Field id="sell-unit" label="호" inputMode="numeric" required value={f.unit} onChange={(e) => set("unit", e.target.value)} error={errors.unit} placeholder="1203" />
+        <Field id="sell-unit" label="호" inputMode="numeric" required value={f.unit} onChange={(e) => setUnit(e.target.value)} error={errors.unit} placeholder="1203" hint="호수를 넣으면 층이 자동으로 채워져요" />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <SelectField
@@ -178,7 +209,10 @@ function ListingForm({ onCreated }: { onCreated: (l: Listing) => void }) {
           max={registryMax ?? 99}
           required
           value={f.floor}
-          onChange={(e) => set("floor", e.target.value)}
+          onChange={(e) => {
+            setFloorTouched(true);
+            set("floor", e.target.value);
+          }}
           error={errors.floor ?? floorWarning}
           hint={floorHint}
         />

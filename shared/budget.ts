@@ -4,14 +4,15 @@
  *
  *   한 해 갚을 수 있는 돈 = 연소득 × DSR 비율 − 지금 다른 대출의 한 해 상환액
  *   빌릴 수 있는 돈       = 그 돈을 금리 · 기간으로 원리금균등 상환할 때의 원금
- *   살 수 있는 가격       = 보유 현금 + 빌릴 수 있는 돈 (단, 대출은 매매가의 LTV 70% 까지)
+ *   살 수 있는 가격       = 보유 현금 + 빌릴 수 있는 돈 (단, 대출은 관심 지역의 LTV · 한도까지 — loanRules.ts, 무주택 기준)
  *
  * 목표 매매가는 DSR 30%(여유 있게), 최대 매매가는 DSR 40%(은행 규제 한도)로 계산한다.
- * 실제 한도는 지역 규제 · 소득 증빙 · 은행에 따라 달라 "예상" 으로만 보여 준다.
+ * 실제 한도는 소득 증빙 · 은행에 따라 달라 "예상" 으로만 보여 준다.
  */
+import { ltvRule, zoneOf } from "./loanRules";
+
 export const DSR_TARGET = 0.3;
 export const DSR_MAX = 0.4;
-export const LTV = 0.7;
 
 export interface BudgetInput {
   sido: string; // 관심 지역 시도 코드 (필수)
@@ -58,11 +59,20 @@ export function monthlyFor(p: number, ratePercent: number, years: number): numbe
   return r === 0 ? p / n : (p * r * (1 + r) ** n) / ((1 + r) ** n - 1);
 }
 
+/** 관심 지역의 LTV 규칙 (무주택 기준). 한도는 집값 구간에 따라 달라 가장 넓은 구간(15억 이하)의 값으로 본다 */
+export function budgetRule(v: Pick<BudgetInput, "sido" | "sgg">) {
+  const zone = zoneOf(v.sido, v.sgg) ?? { zone: "other" as const, uncertain: false };
+  return ltvRule(zone.zone, "none", 100_000);
+}
+
 function priceAt(v: BudgetInput, dsr: number): number {
   const monthlyCap = Math.max(0, (v.income * dsr - v.monthlyDebt * 12) / 12);
-  const loan = principalFor(monthlyCap, v.rate, v.years);
+  const rule = budgetRule(v);
+  const byDsr = principalFor(monthlyCap, v.rate, v.years);
+  const loan = rule.cap === null ? byDsr : Math.min(byDsr, rule.cap);
   // 대출은 매매가의 LTV 까지: 가격 ≤ 현금 + 대출, 그리고 대출 ≤ 가격 × LTV → 가격 ≤ 현금 ÷ (1 − LTV)
-  return Math.floor(Math.min(v.cash + loan, v.cash / (1 - LTV)) / 100) * 100;
+  const byLtv = rule.ltv >= 1 ? Infinity : v.cash / (1 - rule.ltv);
+  return Math.floor(Math.min(v.cash + loan, byLtv) / 100) * 100;
 }
 
 export function computeBudget(v: BudgetInput): BudgetResult {

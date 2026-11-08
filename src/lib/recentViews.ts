@@ -19,6 +19,14 @@ export function recentViews(): string[] {
   }
 }
 
+export function clearRecentViews(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* 저장소를 못 쓰는 환경이면 남은 것도 없다 */
+  }
+}
+
 export function rememberView(id: string): void {
   try {
     localStorage.setItem(KEY, JSON.stringify([id, ...recentViews().filter((x) => x !== id)].slice(0, MAX)));

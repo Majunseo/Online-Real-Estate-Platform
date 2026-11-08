@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { TrainFront } from "lucide-react";
 import { STATION_RADIUS_M } from "@shared/filters";
 import type { Complex } from "@shared/types";
-import { formatDate, formatManwon, toPyeong } from "@/lib/format";
+import { formatDate, formatManwon, formatUnitPrice, toPyeong } from "@/lib/format";
 import { SkeletonBar, SkeletonLines } from "@/components/ui/Skeleton";
 import { FavoriteButton } from "@/features/favorites/FavoriteButton";
 import { ComplexThumb } from "./ComplexThumb";
@@ -62,6 +62,7 @@ export function ComplexCard({ c, className = CARD_WIDTH }: { c: Complex; classNa
         </div>
         <div className="px-3 pb-3 pt-2.5">
           <p className="text-[25px] font-extrabold tracking-tight">{formatManwon(c.latest.amount)}</p>
+          <p className="text-[14px] text-muted">{formatUnitPrice(c.latest.amount, c.latest.areaM2)}</p>
           <Specs c={c} />
           <p className="mt-2 truncate text-[17px] text-ink group-hover:underline">
             {c.name}, {c.sido} {c.sgg} {c.umd} {c.jibun}

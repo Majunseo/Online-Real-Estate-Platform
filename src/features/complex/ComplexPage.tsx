@@ -6,7 +6,8 @@ import type { BuildingInfo, Complex, ComplexDetail, Deal } from "@shared/types";
 import { STATION_RADIUS_M } from "@shared/filters";
 import { postJson, useJson } from "@/lib/api";
 import { rememberView } from "@/lib/recentViews";
-import { formatDate, formatManwon, toPyeong } from "@/lib/format";
+import { RecentViews } from "@/features/favorites/RecentViews";
+import { formatDate, formatManwon, perM2, perPyeong, toPyeong } from "@/lib/format";
 import { ComplexCard } from "@/components/listing/ComplexCard";
 import { ComplexThumb } from "@/components/listing/ComplexThumb";
 import { MapErrorBoundary } from "@/components/map/MapErrorBoundary";
@@ -101,9 +102,10 @@ export function ComplexPage() {
             </div>
             <FavoriteButton complexId={c.id} name={c.name} variant="inline" />
           </div>
-          <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {[
               ["최근 실거래가", formatManwon(c.latest.amount)],
+              [`평당 가격 (㎡당 ${formatManwon(perM2(c.latest.amount, c.latest.areaM2) ?? 0)})`, formatManwon(perPyeong(c.latest.amount, c.latest.areaM2) ?? 0)],
               ["최근 계약일", formatDate(c.latest.date)],
               ["기간 내 거래", `${valid.length}건`],
               ["준공", `${c.buildYear}년`],
@@ -115,7 +117,7 @@ export function ComplexPage() {
             ))}
           </dl>
           {c.building && <BuildingFacts b={c.building} />}
-          <Link to={`/loan?price=${c.latest.amount}`} className="btn-outline mt-5 inline-flex">
+          <Link to={`/loan?price=${c.latest.amount}&sido=${c.sggCode.slice(0, 2)}&sgg=${c.sggCode}`} className="btn-outline mt-5 inline-flex">
             <Calculator className="h-5 w-5" aria-hidden="true" />이 가격으로 대출 계산하기
           </Link>
         </div>
@@ -142,7 +144,7 @@ export function ComplexPage() {
             </button>
           ))}
         </div>
-        <div role="tabpanel" className="mt-4 grid gap-6 lg:grid-cols-[1fr_420px]">
+        <div role="tabpanel" className="mt-4 grid gap-6 lg:grid-cols-[1fr_480px]">
           <div className="rounded-xl border border-line p-4">
             <PriceChart deals={areaDeals} title={`${c.name} 전용 ${current}㎡`} />
           </div>
@@ -153,15 +155,17 @@ export function ComplexPage() {
                 <tr>
                   <th className="px-3 py-2 font-semibold">계약일</th>
                   <th className="px-3 py-2 font-semibold">가격</th>
+                  <th className="px-3 py-2 font-semibold">평당</th>
                   <th className="px-3 py-2 font-semibold">층</th>
                   <th className="px-3 py-2 font-semibold">구분</th>
                 </tr>
               </thead>
               <tbody>
                 {areaDeals.map((d, i) => (
-                  <tr key={i} className={clsx("border-t border-line", d.canceled && "text-muted line-through")}>
+                  <tr key={i} className={clsx("border-t border-line whitespace-nowrap", d.canceled && "text-muted line-through")}>
                     <td className="px-3 py-2">{formatDate(d.date)}</td>
                     <td className="px-3 py-2 font-bold">{formatManwon(d.amount)}</td>
+                    <td className="px-3 py-2 text-muted">{formatManwon(perPyeong(d.amount, d.areaM2) ?? 0)}</td>
                     <td className="px-3 py-2">{d.floor}층</td>
                     <td className="px-3 py-2 no-underline">{d.canceled ? "계약 해제" : d.dealingType}</td>
                   </tr>
@@ -187,6 +191,8 @@ export function ComplexPage() {
           <MiniMap lat={c.lat} lng={c.lng} label={`${c.name} (${address})`} className="mt-4 h-[300px]" onStreetView={openStreet} />
         </MapErrorBoundary>
       </section>
+
+      <RecentViews variant="row" exclude={c.id} />
 
       {nearby.length > 0 && (
         <section aria-labelledby="nearby-title" className="mt-10">
@@ -281,7 +287,7 @@ function BuildingFacts({ b }: { b: BuildingInfo }) {
       <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 rounded-xl border border-line px-4 py-3 sm:grid-cols-3">
         {facts.map(([k, v]) => (
           <div key={k} className="flex justify-between gap-3 text-[15px]">
-            <dt className="text-muted">{k}</dt>
+            <dt className="whitespace-nowrap text-muted">{k}</dt>
             <dd className="font-bold">{v}</dd>
           </div>
         ))}

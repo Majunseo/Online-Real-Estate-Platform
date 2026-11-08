@@ -1,11 +1,16 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { clsx } from "clsx";
+import { BUYERS, ltvRule, maxLoan, RULE_BASIS, ZONE_LABEL, zoneOf, type Buyer } from "@shared/loanRules";
 import { formatManwon } from "@/lib/format";
 import { Page } from "@/components/page/Page";
+import { RegionSelect } from "@/components/form/RegionSelect";
 import { METHODS, schedule, won, yearly, type Method } from "./math";
 
 interface Inputs {
+  sido: string; // 시도 코드 (선택)
+  sgg: string; // 시군구 코드 (선택)
+  buyer: Buyer;
   price: string; // 만원
   loan: string; // 만원
   rate: string; // 연 %
@@ -34,14 +39,33 @@ function check(v: Inputs) {
   return { price, loan, rate, years, income, errors };
 }
 
+const isBuyer = (s: string | null): s is Buyer => BUYERS.some((b) => b.value === s);
+
 /**
- * 대출 계산. 매매가 · 대출 금액 · 금리 · 기간 · 상환 방식으로 월 상환액과 총 이자, 연도별 상환표를 보여 준다.
- * 단지 상세에서 ?price=(만원)로 들어오면 매매가와 대출 금액(매매가의 60%)이 채워진다. 계산은 화면 안에서만 한다.
+ * 대출 계산. 지역 · 구매자 구분으로 LTV 한도를 보여 주고, 매매가 · 대출 금액 · 금리 · 기간 · 상환 방식으로 월 상환액과 총 이자, 연도별 상환표를 계산한다.
+ * 단지 상세에서 ?price=(만원)&sido=&sgg= 로 들어오면 매매가와 지역이 채워지고 대출 금액은 그 지역 한도로 들어간다. 지역이 없으면 매매가의 60%.
+ * 계산은 화면 안에서만 한다.
  */
 export function LoanPage() {
   const [params] = useSearchParams();
   const fromPrice = Number(params.get("price")) > 0 ? Number(params.get("price")) : 60_000;
-  const [v, setV] = useState<Inputs>({ price: String(fromPrice), loan: String(Math.round(fromPrice * 0.6)), rate: "4.0", years: "30", income: "", method: "equal-payment" });
+  const fromSido = /^\d{2}$/.test(params.get("sido") ?? "") ? params.get("sido")! : "";
+  const fromSgg = fromSido && /^\d{5}$/.test(params.get("sgg") ?? "") && params.get("sgg")!.startsWith(fromSido) ? params.get("sgg")! : "";
+  const fromBuyer = isBuyer(params.get("buyer")) ? (params.get("buyer") as Buyer) : "none";
+  const firstZone = zoneOf(fromSido || null, fromSgg || null);
+  const firstLoan = firstZone ? maxLoan(fromPrice, ltvRule(firstZone.zone, fromBuyer, fromPrice)) : Math.round(fromPrice * 0.6);
+
+  const [v, setV] = useState<Inputs>({
+    sido: fromSido,
+    sgg: fromSgg,
+    buyer: fromBuyer,
+    price: String(fromPrice),
+    loan: String(firstLoan),
+    rate: "4.0",
+    years: "30",
+    income: "",
+    method: "equal-payment",
+  });
   const set = (k: keyof Inputs, value: string) => setV((prev) => ({ ...prev, [k]: value }));
 
   const c = check(v);
@@ -51,12 +75,75 @@ export function LoanPage() {
   // DSR(이 대출만): 첫해 원리금 ÷ 연소득
   const dsr = ok && s && c.income > 0 ? (yearly(s)[0].payment / (c.income * 10_000)) * 100 : null;
 
+  // 지역 · 구매자 구분에 따른 한도
+  const zone = zoneOf(v.sido || null, v.sgg || null);
+  const rule = zone && c.price > 0 ? ltvRule(zone.zone, v.buyer, c.price) : null;
+  const limit = rule ? maxLoan(c.price, rule) : null;
+  const overLimit = limit !== null && c.loan > limit;
+
+  // 지역 · 구매자 구분을 바꾸면 대출 금액을 그 한도로 맞춘다 (매매가를 고칠 때는 손대지 않는다)
+  const limitKey = `${v.sido}|${v.sgg}|${v.buyer}`;
+  const [lastKey, setLastKey] = useState(limitKey);
+  useEffect(() => {
+    if (limitKey === lastKey) return;
+    setLastKey(limitKey);
+    if (limit !== null) setV((prev) => ({ ...prev, loan: String(limit) }));
+  }, [limitKey, lastKey, limit]);
+
   return (
-    <Page title="대출 계산" description="매매가와 대출 조건을 넣으면 매달 갚을 금액과 총 이자를 계산해요." width="max-w-[1100px]">
-      <div className="grid gap-8 lg:grid-cols-[380px_1fr]">
+    <Page title="대출 계산" description="지역과 매매가, 대출 조건을 넣으면 LTV 한도와 매달 갚을 금액, 총 이자를 계산해요." width="max-w-[1100px]">
+      <div className="grid gap-8 lg:grid-cols-[400px_1fr]">
         <form className="space-y-4 rounded-2xl border border-line p-5" onSubmit={(e) => e.preventDefault()} noValidate aria-label="대출 조건">
+          <div>
+            <p className="text-[16px] font-bold">집이 있는 지역</p>
+            <div className="mt-1.5">
+              <RegionSelect sido={v.sido} sgg={v.sgg} onChange={(sd, g) => setV((p) => ({ ...p, sido: sd, sgg: g }))} />
+            </div>
+            <p className="mt-1 text-[14px] text-muted">규제지역(서울 전역 · 경기 12곳)은 LTV 가 40%예요. 고르면 한도를 계산해요.</p>
+          </div>
+          <div>
+            <label htmlFor="loan-buyer" className="text-[16px] font-bold">
+              구매자 구분
+            </label>
+            <select id="loan-buyer" value={v.buyer} onChange={(e) => set("buyer", e.target.value)} className="mt-1.5 h-12 w-full rounded-xl border-[1.5px] border-muted/60 bg-surface px-3 text-[17px] focus:border-brand focus:outline-none">
+              {BUYERS.map((b) => (
+                <option key={b.value} value={b.value}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <NumberField id="loan-price" label="매매가" unit="만 원" value={v.price} onChange={(x) => set("price", x)} error={c.errors.price} hint={c.price > 0 ? formatManwon(c.price) : undefined} />
-          <NumberField id="loan-amount" label="대출 금액" unit="만 원" value={v.loan} onChange={(x) => set("loan", x)} error={c.errors.loan} hint={c.loan > 0 && c.price > 0 ? `${formatManwon(c.loan)} · LTV ${((c.loan / c.price) * 100).toFixed(1)}%` : undefined} />
+
+          {rule && limit !== null && (
+            <div className={clsx("rounded-xl px-4 py-3 text-[14px]", rule.ltv === 0 ? "bg-tag/10" : "bg-brand-soft")} aria-live="polite">
+              <p className="font-bold text-ink">
+                {ZONE_LABEL[rule.zone]}
+                {zone?.uncertain && " (시군구를 고르면 규제지역인지 알 수 있어요)"} · LTV {Math.round(rule.ltv * 100)}%{rule.cap !== null && rule.cap > 0 && ` · 한도 ${formatManwon(rule.cap)}`}
+              </p>
+              <p className="mt-0.5 text-[16px]">
+                최대 대출 <b>{limit > 0 ? formatManwon(limit) : "0원"}</b>
+              </p>
+              <p className="mt-1 text-muted">{rule.note}</p>
+              {limit > 0 && c.loan !== limit && (
+                <button type="button" onClick={() => set("loan", String(limit))} className="mt-1.5 font-bold text-brand hover:underline">
+                  이 한도로 대출 금액 채우기
+                </button>
+              )}
+            </div>
+          )}
+
+          <NumberField
+            id="loan-amount"
+            label="대출 금액"
+            unit="만 원"
+            value={v.loan}
+            onChange={(x) => set("loan", x)}
+            error={c.errors.loan}
+            warn={overLimit ? `이 지역 한도 ${formatManwon(limit!)}보다 많아요. 은행에서 이만큼은 빌리기 어려워요.` : undefined}
+            hint={c.loan > 0 && c.price > 0 ? `${formatManwon(c.loan)} · LTV ${((c.loan / c.price) * 100).toFixed(1)}%` : undefined}
+          />
           <div className="grid grid-cols-2 gap-3">
             <NumberField id="loan-rate" label="연 금리" unit="%" step="0.1" value={v.rate} onChange={(x) => set("rate", x)} error={c.errors.rate} />
             <NumberField id="loan-years" label="기간" unit="년" value={v.years} onChange={(x) => set("years", x)} error={c.errors.years} />
@@ -88,9 +175,10 @@ export function LoanPage() {
                 <Stat label={v.method === "bullet" ? "마지막 달 (원금 포함)" : "마지막 달 상환액"} value={won(s.lastPayment)} />
                 <Stat label="총 이자" value={won(s.totalInterest)} />
                 <Stat label="총 상환액" value={won(s.totalPayment)} />
-                <Stat label="LTV (대출 ÷ 매매가)" value={`${ltv.toFixed(1)}%`} />
-                <Stat label="DSR (이 대출만, 첫해)" value={dsr === null ? "연소득을 넣어 주세요" : `${dsr.toFixed(1)}%`} />
+                <Stat label={rule ? `LTV (한도 ${Math.round(rule.ltv * 100)}%)` : "LTV (대출 ÷ 매매가)"} value={`${ltv.toFixed(1)}%`} warn={overLimit} />
+                <Stat label="DSR (이 대출만, 첫해)" value={dsr === null ? "연소득을 넣어 주세요" : `${dsr.toFixed(1)}%`} warn={dsr !== null && dsr > 40} />
               </dl>
+              {dsr !== null && dsr > 40 && <p className="mt-2 text-[14px] text-tag">DSR 이 40%를 넘어요. 은행 규제 한도(40%) 안이어야 대출이 나와요.</p>}
               <h2 className="mt-8 text-[20px] font-bold">연도별 상환표</h2>
               <div className="mt-3 max-h-[360px] overflow-auto rounded-xl border border-line">
                 <table className="w-full text-right text-[15px]">
@@ -117,7 +205,7 @@ export function LoanPage() {
                 </table>
               </div>
               <p className="mt-4 text-[14px] text-muted">
-                실제 대출 한도와 금리는 은행 · 소득 · 규제 지역에 따라 달라요. 금리에 따라 얼마나 바뀌는지는{" "}
+                LTV 한도는 {RULE_BASIS}이고, 실제 한도와 금리는 은행 심사 · 소득 · DSR 에 따라 더 줄 수 있어요. 금리에 따라 얼마나 바뀌는지는{" "}
                 <Link to={`/loan/rates?amount=${c.loan}&years=${c.years}`} className="font-bold text-brand hover:underline">
                   금리별 상환액
                 </Link>
@@ -131,8 +219,8 @@ export function LoanPage() {
   );
 }
 
-function NumberField({ id, label, unit, value, onChange, error, hint, step }: { id: string; label: string; unit: string; value: string; onChange: (v: string) => void; error?: string; hint?: string; step?: string }) {
-  const describedBy = error ? `${id}-error` : hint ? `${id}-hint` : undefined;
+function NumberField({ id, label, unit, value, onChange, error, warn, hint, step }: { id: string; label: string; unit: string; value: string; onChange: (v: string) => void; error?: string; warn?: string; hint?: string; step?: string }) {
+  const describedBy = error ? `${id}-error` : warn ? `${id}-warn` : hint ? `${id}-hint` : undefined;
   return (
     <div>
       <label htmlFor={id} className="text-[16px] font-bold">
@@ -149,13 +237,17 @@ function NumberField({ id, label, unit, value, onChange, error, hint, step }: { 
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
-          className={clsx("h-12 w-full rounded-xl border-[1.5px] pl-4 pr-16 text-[17px] focus:outline-none", error ? "border-tag" : "border-muted/60 focus:border-brand")}
+          className={clsx("h-12 w-full rounded-xl border-[1.5px] pl-4 pr-16 text-[17px] focus:outline-none", error ? "border-tag" : warn ? "border-tag/60 focus:border-tag" : "border-muted/60 focus:border-brand")}
         />
         <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[15px] text-muted">{unit}</span>
       </div>
       {error ? (
         <p id={`${id}-error`} role="alert" className="mt-1 text-[14px] text-tag">
           {error}
+        </p>
+      ) : warn ? (
+        <p id={`${id}-warn`} className="mt-1 text-[14px] text-tag">
+          {warn}
         </p>
       ) : (
         hint && (
@@ -168,11 +260,11 @@ function NumberField({ id, label, unit, value, onChange, error, hint, step }: { 
   );
 }
 
-function Stat({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function Stat({ label, value, strong, warn }: { label: string; value: string; strong?: boolean; warn?: boolean }) {
   return (
-    <div className={clsx("rounded-xl px-4 py-3", strong ? "bg-brand text-white" : "bg-band")}>
+    <div className={clsx("rounded-xl px-4 py-3", strong ? "bg-brand text-white" : warn ? "bg-tag/10" : "bg-band")}>
       <dt className={clsx("text-[14px]", strong ? "text-white/85" : "text-muted")}>{label}</dt>
-      <dd className="mt-0.5 text-[22px] font-extrabold">{value}</dd>
+      <dd className={clsx("mt-0.5 text-[22px] font-extrabold", warn && "text-tag")}>{value}</dd>
     </div>
   );
 }

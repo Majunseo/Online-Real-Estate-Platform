@@ -8,7 +8,11 @@ import { readCookie, setCookie } from "../http";
  * 로그인 상태는 HttpOnly 쿠키 하나로 들고 다닌다. 화면 스크립트는 쿠키를 읽을 수 없다.
  * DB 에는 토큰 원문이 아니라 SHA-256 값만 둔다 (DB 가 새도 그 값으로는 로그인할 수 없다).
  */
-export const SESSION_COOKIE = "jipteo_session";
+/**
+ * 쿠키는 포트와 상관없이 호스트(127.0.0.1) 단위로 공유된다. 정상본(8094)과 결함본(8095, JIPTEO_DB 가 다른 파일)을 함께 띄우면
+ * 같은 이름의 쿠키를 서로 덮어써 한쪽에서 로그인하면 다른 쪽이 로그아웃된 것처럼 보인다. DB 를 따로 쓰는 서버는 쿠키 이름도 따로 쓴다.
+ */
+export const SESSION_COOKIE = process.env.JIPTEO_DB ? "jipteo_session_alt" : "jipteo_session";
 const DAYS = 30;
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
