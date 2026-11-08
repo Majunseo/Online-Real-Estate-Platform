@@ -1,3 +1,4 @@
+import { bugOn } from "@/lib/bugs";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { User } from "@shared/auth";
 import { getJson, postJson, sendJson } from "@/lib/api";
@@ -73,5 +74,7 @@ export function useAuth(): AuthState {
 
 /** 로그인 · 가입을 마치고 돌아갈 곳. 다른 사이트 주소로 튀지 않게 이 사이트 안의 경로만 받는다 */
 export function safeNext(next: string | null): string {
+  // [N1] 결함: 돌아갈 곳을 무시하고 늘 첫 화면으로
+  if (bugOn("N1")) return "/";
   return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/login") && !next.startsWith("/signup") ? next : "/";
 }
