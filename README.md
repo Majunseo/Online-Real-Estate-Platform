@@ -51,6 +51,20 @@ GET  /gt.json     정답지 (결함 레지스트리에서 만든다)
 POST /_reset      DB 를 처음 상태(시드)로 되돌린다
 ```
 
+### 결함과 브랜치
+
+결함은 코드 안에 토글(`isOn("F1")` · `bugOn("U1")`)로 들어 있고 기본은 모두 꺼진 정상 사이트다.
+분야별 브랜치에서 주입해 `develop` 에 합쳤다. 증상 · 재현 절차는 [docs/bugs-injected.md](docs/bugs-injected.md).
+
+| 브랜치 | 내용 |
+|---|---|
+| `main` | 정상본 (결함 레지스트리 비어 있음) |
+| `feature/bugs-functional` | F1-F4 기능 결함 |
+| `feature/bugs-validation` | V1-V3 입력 검증 결함 |
+| `feature/bugs-routing` | N1-N2 이동 · 라우팅 결함 |
+| `feature/bugs-ui` | U1-U3 UI 결함 |
+| `develop` | 위 네 브랜치를 합친 결함본 (12건). `npm run dev:bugs` 로 전부 켠다 |
+
 ## 환경 변수 (`.env`)
 
 `.env` 는 저장소에 올리지 않습니다. 이름은 `.env.example` 에 있습니다.
