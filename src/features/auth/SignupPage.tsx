@@ -1,3 +1,4 @@
+import { bugOn } from "@/lib/bugs";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PASSWORD_MIN, validateEmail, validateName, validatePassword } from "@shared/auth";
@@ -30,7 +31,8 @@ function check(f: Form): Errors {
   set("name", validateName(f.name));
   set("password", validatePassword(f.password));
   if (!f.confirm) errors.confirm = "비밀번호를 한 번 더 입력해 주세요.";
-  else if (f.confirm !== f.password) errors.confirm = "비밀번호가 서로 달라요.";
+  // [V2] 결함: 확인란이 비어 있지만 않으면 비밀번호와 같은지 보지 않는다
+  else if (!bugOn("V2") && f.confirm !== f.password) errors.confirm = "비밀번호가 서로 달라요.";
   if (!f.terms) errors.terms = "이용약관과 개인정보처리방침에 동의해 주세요.";
   return errors;
 }

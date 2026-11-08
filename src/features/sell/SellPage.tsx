@@ -1,3 +1,4 @@
+import { bugOn } from "@/lib/bugs";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Home, Trash2 } from "lucide-react";
@@ -161,7 +162,8 @@ function ListingForm({ onCreated }: { onCreated: (l: Listing) => void }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setDone(null);
-    const found = validateListing(input(), registryMax ?? undefined);
+    // [V3] 결함: 최고층 검사 건너뜀 · [V1] 결함: 가격 상한 검사 건너뜀 (서버도 같은 토글)
+    const found = validateListing(input(), bugOn("V3") ? undefined : (registryMax ?? undefined), { noPriceCap: bugOn("V1") });
     setErrors(found);
     const first = Object.keys(found)[0];
     if (first) return document.getElementById(`sell-${first}`)?.focus();

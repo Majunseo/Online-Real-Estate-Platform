@@ -40,7 +40,7 @@ export interface ListingInput {
 export type ListingErrors = Partial<Record<keyof ListingInput, string>>;
 
 /** maxFloor: 건축물대장의 단지 최고층 (알면 그보다 높은 층은 막는다) */
-export function validateListing(v: ListingInput, maxFloor?: number): ListingErrors {
+export function validateListing(v: ListingInput, maxFloor?: number, opts: { noPriceCap?: boolean } = {}): ListingErrors {
   const e: ListingErrors = {};
   if (!v.complexId) e.complexId = "단지를 골라 주세요.";
   if (!/^\d{1,4}$/.test(v.building.trim())) e.building = "동은 숫자로 입력해 주세요. 예: 101";
@@ -48,7 +48,8 @@ export function validateListing(v: ListingInput, maxFloor?: number): ListingErro
   if (!(v.areaM2 > 0)) e.areaM2 = "전용면적을 골라 주세요.";
   if (!Number.isInteger(v.floor) || v.floor < 1 || v.floor > 99) e.floor = "층은 1~99 사이 숫자로 입력해 주세요.";
   else if (maxFloor && v.floor > maxFloor) e.floor = `이 단지의 최고층은 ${maxFloor}층이에요 (건축물대장).`;
-  if (!Number.isInteger(v.price) || v.price < PRICE_MIN || v.price > PRICE_MAX) e.price = "희망 가격은 1,000만 원 이상 100억 원 이하로 입력해 주세요.";
+  // noPriceCap: [V1] 결함본에서만 true — 상한(100억) 검사를 건너뛴다
+  if (!Number.isInteger(v.price) || v.price < PRICE_MIN || (!opts.noPriceCap && v.price > PRICE_MAX)) e.price = "희망 가격은 1,000만 원 이상 100억 원 이하로 입력해 주세요.";
   const phone = validatePhone(v.contact);
   if (phone) e.contact = phone;
   const desc = text("설명", v.description, DESCRIPTION_MAX, false);
