@@ -103,7 +103,8 @@ export const memberRoutes: Routes = {
       contact: str(b.contact),
       description: str(b.description),
     };
-    const errors = validateListing(input, complexById.get(input.complexId)?.building?.maxFloor);
+    // [V3] 결함: 최고층 검사를 건너뛴다 · [V1] 결함: 가격 상한 검사를 건너뛴다
+    const errors = validateListing(input, isOn("V3") ? undefined : complexById.get(input.complexId)?.building?.maxFloor, { noPriceCap: isOn("V1") });
     if (input.complexId && !complexById.has(input.complexId)) errors.complexId = "없는 단지예요. 목록에서 골라 주세요.";
     const [field, message] = Object.entries(errors)[0] ?? [];
     if (field) return json(res, 400, { error: "invalid_input", field, message, errors });
