@@ -10,6 +10,11 @@ export interface Deal {
   date: string; // dealYear-dealMonth-dealDay (YYYY-MM-DD)
   dealingType: "중개거래" | "직거래"; // dealingGbn
   canceled: boolean; // cdealType 이 있으면 계약 해제
+  /** 아래는 2026-11 재수집부터 들어온다 (일괄 거래 판별용). 예전 스냅숏에는 없다 */
+  dong?: string; // aptDong
+  buyer?: string; // buyerGbn (개인 · 법인 · 공공기관 …)
+  seller?: string; // slerGbn
+  registeredAt?: string | null; // rgstDate "26.10.22" → "2026-10-22"
 }
 
 /** 건축물대장 표제부로 모은 단지 정보 (세대가 있는 공동주택 동 기준) */

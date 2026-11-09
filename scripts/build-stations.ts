@@ -118,18 +118,14 @@ function distM(a: { lat: number; lng: number }, b: { lat: number; lng: number })
   return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
 }
 
-async function geocode(address: string): Promise<{ lat: number; lng: number } | null> {
-  process.loadEnvFile(".env");
-  const id = process.env.NAVER_GEOCODE_CLIENT_ID?.trim();
-  const secret = process.env.NAVER_GEOCODE_CLIENT_SECRET?.trim();
-  if (!id || !secret) return null;
-  const r = await fetch(`https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=${encodeURIComponent(address)}`, {
-    headers: { "x-ncp-apigw-api-key-id": id, "x-ncp-apigw-api-key": secret, accept: "application/json" },
-  });
-  if (!r.ok) return null;
-  const a = ((await r.json()) as { addresses?: { x: string; y: string }[] }).addresses?.[0];
-  return a ? { lat: Number(a.y), lng: Number(a.x) } : null;
-}
+/**
+ * 좌표가 틀린 역을 손으로 바로잡는 표 (역 이름|노선 → 위도 · 경도). 출처: 위키백과 역 문서의 좌표 (공개 자료).
+ * 예전에는 네이버 Geocoding 으로 주소를 다시 찾았는데, 네이버 약관이 결과 저장을 막아 공개 좌표로 바꿨다.
+ * 지금 알려진 오류는 양원역(경의중앙선) 하나 — 원본이 다른 지역의 같은 이름 역 좌표를 넣어 두었다.
+ */
+const FIXES: Record<string, { lat: number; lng: number }> = {
+  "양원|경의중앙선": { lat: 37.6067, lng: 127.1078 },
+};
 
 async function main() {
   const rows: Row[] = readSheet(src)
@@ -141,8 +137,8 @@ async function main() {
     const peers = rows.filter((q) => q !== r && q.line === r.line);
     const nearest = Math.min(...peers.map((q) => distM(r, q)));
     if (peers.length && nearest > 30_000) {
-      const fixed = await geocode(r.address.replace(/\(.*?\)/g, "").trim());
-      console.log(`좌표 오류: ${r.name}역 (${r.line}) 같은 노선 가장 가까운 역까지 ${Math.round(nearest / 1000)}km → ${fixed ? `주소로 고침 (${fixed.lat.toFixed(5)}, ${fixed.lng.toFixed(5)})` : "고치지 못해 뺌"}`);
+      const fixed = FIXES[`${r.name}|${r.line}`] ?? null;
+      console.log(`좌표 오류: ${r.name}역 (${r.line}) 같은 노선 가장 가까운 역까지 ${Math.round(nearest / 1000)}km → ${fixed ? `FIXES 표로 고침 (${fixed.lat.toFixed(5)}, ${fixed.lng.toFixed(5)})` : "FIXES 표에 없어 뺌 (scripts/build-stations.ts 에 추가)"}`);
       if (fixed) Object.assign(r, fixed);
       else r.name = "";
     }

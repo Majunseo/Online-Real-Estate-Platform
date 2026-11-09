@@ -72,7 +72,7 @@ POST /_reset      DB 를 처음 상태(시드)로 되돌린다
 | 이름 | 쓰는 곳 |
 |---|---|
 | `VITE_NAVER_MAP_CLIENT_ID` | 네이버 지도 · 거리뷰 (화면). 네이버 클라우드에 Web 서비스 URL(`http://127.0.0.1:8094` 등)을 등록해야 한다 |
-| `NAVER_GEOCODE_CLIENT_ID` · `NAVER_GEOCODE_CLIENT_SECRET` | 단지 주소 → 좌표 (`fetch:molit`, `build:stations`) |
+| `JUSO_CONFIRM_KEY` | 단지 주소 → 좌표. 행정안전부 도로명주소 **좌표제공 API** 승인키 (business.juso.go.kr). 결과를 저장 · 재배포할 수 있는 공공데이터라 쓴다 (`fetch:molit`) |
 | `MOLIT_SERVICE_KEY` · `MOLIT_ENDPOINT` | 국토교통부 아파트 매매 실거래가 (`fetch:molit`) |
 | `BLD_SERVICE_KEY` · `BLD_ENDPOINT` | 국토교통부 건축물대장 표제부 (`fetch:buildings`) |
 
@@ -85,7 +85,7 @@ POST /_reset      DB 를 처음 상태(시드)로 되돌린다
 
 | 파일 | 만드는 명령 | 출처 |
 |---|---|---|
-| `server/data/molit/snapshot.json` (+ `geocode.json`) | `npm run fetch:molit [-- 202608 202610 \| --missing]` | 국토교통부 아파트 매매 실거래가 상세 자료 (공공데이터포털). 지금은 52개 시군구, 2026년 8~10월 계약분, 단지 8,104곳 |
+| `server/data/molit/snapshot.json` (+ `geocode.json`) | `npm run fetch:molit [-- 202608 202610 \| --missing]` | 국토교통부 아파트 매매 실거래가 상세 자료 (공공데이터포털). 좌표는 원본의 도로명주소 코드로 행정안전부 좌표제공 API 에서 받는다. 지금은 52개 시군구, 2026년 8~10월 계약분 |
 | `server/data/molit/buildings.json` | `npm run fetch:buildings` | 국토교통부_건축HUB_건축물대장정보 서비스 (표제부) |
 | `server/data/stations.json` | `npm run build:stations -- <역사정보 .xlsx>` | 전국도시철도역사정보표준데이터 (공공데이터포털). 좌표가 다른 지역의 같은 이름 역으로 잘못 든 역(양원역)은 주소로 다시 찾는다 |
 | `server/data/schools.json` | `npm run build:schools -- <학교위치 .csv>` | 전국초중등학교위치표준데이터 (공공데이터포털, 한국교육시설안전원). XLS 로 받았으면 CSV 로 저장해서 넣는다 |
@@ -94,6 +94,7 @@ POST /_reset      DB 를 처음 상태(시드)로 되돌린다
 - 2026년 7월 1일 출범한 전남광주통합특별시는 새 코드(12xxx)로 받습니다. 옛 광주(29) · 전남(46) 코드로는 거래가 나오지 않습니다.
 - 공공데이터 API 는 하루 호출 한도가 있으니 넓은 범위를 한꺼번에 다시 받지 마세요. 건축물대장 API 는 초당 제한이 빡빡해 한 번에 하나씩 부릅니다.
 - 역 · 학교까지 거리, 역세권(역 500m) · 학교 근처 조건은 모두 **직선 거리** 기준입니다.
+- 단지 좌표는 건물 **출입구** 좌표(도로명주소 DB)라 단지 중심과 수십 m 차이가 날 수 있습니다. 도로명주소가 없는 옛 단지는 좌표를 못 찾아 제외됩니다.
 
 ## 폴더 구조
 

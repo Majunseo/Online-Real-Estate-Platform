@@ -21,7 +21,17 @@ export interface SnapshotComplex {
   buildYear: number;
   lat: number;
   lng: number;
+  /** 행정안전부 좌표제공 API 에 넘기는 도로명주소 코드 (실거래가 원본의 sggCd+umdCd · roadNmSggCd+roadNmCd · roadNmbCd · 본번 · 부번). 도로명이 없는 단지는 null */
+  road?: RoadCodes | null;
   deals: Deal[]; // 최근 거래부터
+}
+
+export interface RoadCodes {
+  admCd: string; // 행정구역(법정동) 코드 10자리
+  rnMgtSn: string; // 도로명코드 12자리
+  udrtYn: string; // 지하 여부 0 · 1
+  buldMnnm: string; // 건물 본번
+  buldSlno: string; // 건물 부번
 }
 
 export interface Snapshot {
