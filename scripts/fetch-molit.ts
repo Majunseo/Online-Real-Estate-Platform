@@ -7,22 +7,23 @@
  *
  * 1) TARGET_SGG 의 시군구 × 달마다 실거래가 API 를 부른다 (MOLIT_SERVICE_KEY, MOLIT_ENDPOINT)
  * 2) 단지(aptSeq)별로 묶는다
- * 3) 단지 주소를 네이버 Geocoding 으로 좌표로 바꾼다 (NAVER_GEOCODE_CLIENT_ID/SECRET).
- *    결과는 geocode.json 에 남겨 다음 실행 때 다시 부르지 않는다.
+ * 3) 단지의 도로명주소 코드로 행정안전부 좌표제공 API 를 불러 좌표를 받는다 (JUSO_CONFIRM_KEY, scripts/lib/juso.ts).
+ *    공공데이터라 결과를 저장 · 재배포할 수 있다. 결과는 geocode.json 에 남겨 다음 실행 때 다시 부르지 않는다.
+ *    (2026-11 까지는 네이버 Geocoding 을 썼는데, 네이버 약관이 결과 저장을 막아 바꿨다)
  * 키는 .env 에서 읽고 화면이나 로그에 찍지 않는다.
  */
 import fs from "fs";
 import path from "path";
 import type { Deal } from "../shared/types.ts";
-import type { Snapshot, SnapshotComplex } from "../shared/snapshot.ts";
+import type { RoadCodes, Snapshot, SnapshotComplex } from "../shared/snapshot.ts";
 import { sidoByCode } from "../shared/regions.ts";
 import { TARGET_SGG } from "../server/data/sgg.ts";
 import { inSido } from "../server/data/geo.ts";
+import { coordByCodes, utmkToWgs84 } from "./lib/juso.ts";
 
 const OUT_DIR = path.resolve("server/data/molit");
 const SNAPSHOT = path.join(OUT_DIR, "snapshot.json");
 const GEOCODE_CACHE = path.join(OUT_DIR, "geocode.json");
-const GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode";
 
 process.loadEnvFile(".env");
 const env = (name: string) => {
@@ -30,7 +31,7 @@ const env = (name: string) => {
   if (!v) throw new Error(`.env 에 ${name} 이 비어 있어요.`);
   return v;
 };
-const SECRETS = ["MOLIT_SERVICE_KEY", "NAVER_GEOCODE_CLIENT_ID", "NAVER_GEOCODE_CLIENT_SECRET"].map(env);
+const SECRETS = ["MOLIT_SERVICE_KEY", "JUSO_CONFIRM_KEY"].map(env);
 const redact = (s: string) => SECRETS.reduce((t, k) => t.split(k).join("***"), s);
 
 // ── 1. 실거래가 API ─────────────────────────────────────────────
@@ -81,6 +82,12 @@ async function fetchMonth(lawd: string, ym: string): Promise<RawItem[]> {
   }
 }
 
+/** "26.10.22" → "2026-10-22" (등기일. 비어 있으면 null) */
+const rgstDate = (s: string | undefined) => {
+  const m = s?.trim().match(/^(\d{2})\.(\d{2})\.(\d{2})$/);
+  return m ? `20${m[1]}-${m[2]}-${m[3]}` : null;
+};
+
 function toDeal(it: RawItem): Deal {
   return {
     amount: Number(it.dealAmount.replace(/,/g, "")),
@@ -89,6 +96,22 @@ function toDeal(it: RawItem): Deal {
     date: `${it.dealYear}-${it.dealMonth.padStart(2, "0")}-${it.dealDay.padStart(2, "0")}`,
     dealingType: it.dealingGbn === "직거래" ? "직거래" : "중개거래",
     canceled: Boolean(it.cdealType),
+    ...(it.aptDong?.trim() ? { dong: it.aptDong.trim() } : {}),
+    ...(it.buyerGbn?.trim() ? { buyer: it.buyerGbn.trim() } : {}),
+    ...(it.slerGbn?.trim() ? { seller: it.slerGbn.trim() } : {}),
+    registeredAt: rgstDate(it.rgstDate),
+  };
+}
+
+/** 좌표제공 API 에 넘길 도로명주소 코드. 도로명이 없는 단지(옛 단지 일부)는 null */
+function roadCodesOf(it: RawItem): RoadCodes | null {
+  if (!it.roadNmCd || !it.roadNmSggCd || !it.sggCd || !it.umdCd) return null;
+  return {
+    admCd: `${it.sggCd}${it.umdCd}`.padEnd(10, "0").slice(0, 10),
+    rnMgtSn: `${it.roadNmSggCd}${it.roadNmCd.padStart(7, "0")}`,
+    udrtYn: it.roadNmbCd === "1" ? "1" : "0",
+    buldMnnm: String(num(it.roadNmBonbun)),
+    buldSlno: String(num(it.roadNmBubun)),
   };
 }
 
@@ -118,6 +141,7 @@ function groupByComplex(rows: { sidoCode: string; sggCode: string; sgg: string; 
       bun: item.bonbun || undefined,
       ji: item.bubun || undefined,
       buildYear: num(item.buildYear),
+      road: roadCodesOf(item),
       deals: [],
     };
     draft.deals.push(toDeal(item));
@@ -129,44 +153,19 @@ function groupByComplex(rows: { sidoCode: string; sggCode: string; sgg: string; 
 
 // ── 3. 주소 → 좌표 ──────────────────────────────────────────────
 
-type Cache = Record<string, [number, number] | null>;
+/** 단지 id → [위도, 경도] (못 찾았으면 null). 좌표 출처(src)를 같이 적어 네이버 시절 캐시와 섞이지 않게 한다 */
+type Cache = { src: "juso"; at: Record<string, [number, number] | null> };
 
-async function geocode(query: string): Promise<[number, number] | null> {
-  const r = await fetch(`${GEOCODE_URL}?query=${encodeURIComponent(query)}`, {
-    headers: {
-      "x-ncp-apigw-api-key-id": env("NAVER_GEOCODE_CLIENT_ID"),
-      "x-ncp-apigw-api-key": env("NAVER_GEOCODE_CLIENT_SECRET"),
-      accept: "application/json",
-    },
-  });
-  if (r.status === 429 || r.status >= 500) throw new Error(`geocode HTTP ${r.status}`);
-  if (!r.ok) throw new Error(`geocode HTTP ${r.status} ${redact(await r.text()).slice(0, 200)}`);
-  const body = (await r.json()) as { addresses?: { x: string; y: string }[] };
-  const a = body.addresses?.[0];
-  return a ? [Number(a.y), Number(a.x)] : null;
-}
-
-/** 주소 검색에 쓸 시도 이름. 전남광주통합특별시는 지오코더가 옛 이름을 확실히 알아들으므로 옛 이름을 먼저 쓴다. */
-function sidoNamesFor(d: Draft): string[] {
-  const name = sidoByCode(d.sidoCode)!.name;
-  if (d.sidoCode !== "12") return [name];
-  return [d.sgg.endsWith("구") ? "광주광역시" : "전라남도", name];
-}
-
-/** 세종특별자치시는 아래에 시군구가 없다. "세종특별자치시 세종시 보람동 …" 으로 찾으면 지오코더가 못 찾는다. */
-const sggPart = (d: Draft) => (d.sidoCode === "36" ? "" : `${d.sgg} `);
-
-/** 지번 주소로 먼저, 안 되면 도로명 주소로. 시도 경계 밖으로 나오면 버린다. */
+/**
+ * 도로명주소 코드로 건물 출입구 좌표를 받아 WGS84 로 바꾼다. 시도 경계 밖으로 나오면 버린다.
+ * 도로명 코드가 없는 단지는 좌표를 못 찾는다 (검색 API 는 별도 승인이 필요해 쓰지 않는다).
+ */
 async function locate(d: Draft): Promise<[number, number] | null> {
-  const queries = sidoNamesFor(d).flatMap((sido) => [
-    d.jibun && `${sido} ${sggPart(d)}${d.umd} ${d.jibun}`,
-    d.roadAddress && `${sido} ${sggPart(d)}${d.roadAddress}`,
-  ]).filter(Boolean);
-  for (const q of queries) {
-    const hit = await withRetry(`geocode ${d.id}`, () => geocode(q));
-    if (hit && inSido(d.sidoCode, hit[0], hit[1])) return hit;
-  }
-  return null;
+  if (!d.road) return null;
+  const xy = await withRetry(`juso ${d.id}`, () => coordByCodes(d.road!));
+  if (!xy) return null;
+  const hit = utmkToWgs84(xy.x, xy.y);
+  return inSido(d.sidoCode, hit[0], hit[1]) ? hit : null;
 }
 
 async function mapLimit<T>(items: T[], limit: number, run: (item: T, i: number) => Promise<void>) {
@@ -230,12 +229,16 @@ async function main() {
   console.log(`거래 ${rows.length}건 → 단지 ${drafts.length}곳. 좌표 찾는 중…`);
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  const cache: Cache = fs.existsSync(GEOCODE_CACHE) ? JSON.parse(fs.readFileSync(GEOCODE_CACHE, "utf-8")) : {};
+  const loaded = fs.existsSync(GEOCODE_CACHE) ? (JSON.parse(fs.readFileSync(GEOCODE_CACHE, "utf-8")) as Partial<Cache>) : {};
+  // 네이버 시절 캐시(src 없음)는 버리고 새로 받는다
+  const cache: Cache = loaded.src === "juso" && loaded.at ? (loaded as Cache) : { src: "juso", at: {} };
   let called = 0;
-  await mapLimit(drafts, 6, async (d, i) => {
-    if (!cache[d.id]) { // 처음 보는 단지, 또는 지난번에 못 찾은 단지
-      cache[d.id] = await locate(d);
+  // 좌표 API 는 짧은 시간에 많이 부르면 E0007 로 막으므로 둘씩, 호출 사이에 잠깐 쉰다
+  await mapLimit(drafts, 2, async (d, i) => {
+    if (!cache.at[d.id]) { // 처음 보는 단지, 또는 지난번에 못 찾은 단지
+      cache.at[d.id] = await locate(d);
       called++;
+      await new Promise((r) => setTimeout(r, 120));
     }
     if ((i + 1) % 500 === 0) {
       fs.writeFileSync(GEOCODE_CACHE, JSON.stringify(cache)); // 중간에 끊겨도 다음 실행이 이어 간다
@@ -245,7 +248,7 @@ async function main() {
   fs.writeFileSync(GEOCODE_CACHE, JSON.stringify(cache));
 
   const fresh: SnapshotComplex[] = drafts.flatMap((d) => {
-    const at = cache[d.id];
+    const at = cache.at[d.id];
     return at ? [{ ...d, lat: Math.round(at[0] * 1e6) / 1e6, lng: Math.round(at[1] * 1e6) / 1e6 }] : [];
   });
   // --missing 이면 이미 받은 시군구는 그대로 두고 새로 받은 것만 더한다. 표에서 빠진 시군구는 버린다.
@@ -255,7 +258,7 @@ async function main() {
   // 같은 단지가 두 번 들어가지 않게 (새로 받은 쪽을 남긴다)
   const complexes = [...new Map([...kept, ...fresh].map((c) => [c.id, c])).values()];
   const snapshot: Snapshot = {
-    source: "국토교통부 아파트 매매 실거래가 상세 자료 (공공데이터포털), 좌표: 네이버 Geocoding",
+    source: "국토교통부 아파트 매매 실거래가 상세 자료 (공공데이터포털), 좌표: 행정안전부 도로명주소 좌표제공 API",
     fetchedAt: new Date().toISOString(),
     months: months.map((m) => `${m.slice(0, 4)}-${m.slice(4)}`),
     sgg: [...keptSgg, ...sggSummary].sort((a, b) => (order.get(a.code) ?? 999) - (order.get(b.code) ?? 999)),
@@ -263,7 +266,7 @@ async function main() {
     skipped: (missingOnly ? previous!.skipped : 0) + drafts.length - fresh.length,
   };
   fs.writeFileSync(SNAPSHOT, JSON.stringify(snapshot));
-  console.log(`저장: ${path.relative(process.cwd(), SNAPSHOT)} — 단지 ${complexes.length}곳 (좌표 못 찾음 ${snapshot.skipped}곳, 이번에 Geocoding ${called}번)`);
+  console.log(`저장: ${path.relative(process.cwd(), SNAPSHOT)} — 단지 ${complexes.length}곳 (좌표 못 찾음 ${snapshot.skipped}곳, 이번에 좌표 API ${called}번)`);
 }
 
 main().catch((err) => {
